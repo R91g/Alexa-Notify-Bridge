@@ -85,7 +85,7 @@ Para que tu altavoz te notifique, necesitas decirle a Alexa que quieres usar est
 
 1. Clona este repositorio en tu servidor y entra en la carpeta:
    ```bash
-   git clone https://github.com/TU_USUARIO/Alexa-Notify-Bridge.git
+   git clone https://github.com/R91g/Alexa-Notify-Bridge.git
    cd Alexa-Notify-Bridge
    ```
 2. Haz una copia del archivo de ejemplo de variables de entorno:

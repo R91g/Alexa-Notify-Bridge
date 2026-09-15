@@ -85,7 +85,7 @@ For your speaker to notify you, you need to tell Alexa that you want to use this
 
 1. Clone this repository on your server and enter the directory:
    ```bash
-   git clone https://github.com/YOUR_USER/Alexa-Notify-Bridge.git
+   git clone https://github.com/R91g/Alexa-Notify-Bridge.git
    cd Alexa-Notify-Bridge
    ```
 2. Make a copy of the sample environment variables file:
