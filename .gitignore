@@ -1,0 +1,31 @@
+# Entorno virtual de Python
+.venv/
+venv/
+env/
+
+# Variables de entorno con credenciales reales
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker (volúmenes locales, logs)
+docker-compose.override.yml

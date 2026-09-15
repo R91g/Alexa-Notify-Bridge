@@ -1,0 +1,13 @@
+.env
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+*.md
+LICENSE
+alexa-skill/
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore
+.venv/
+venv/

@@ -1,0 +1,107 @@
+{
+  "manifest": {
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "arn:aws:lambda:us-east-1:318883658404:function:ReflectorTemplateSkill"
+        }
+      }
+    },
+    "permissions": [
+      {
+        "name": "alexa::devices:all:notifications:write"
+      }
+    ],
+    "events": {
+      "endpoint": {
+        "uri": "arn:aws:lambda:us-east-1:318883658404:function:ReflectorTemplateSkill"
+      },
+      "publications": [
+        {
+          "eventName": "AMAZON.MessageAlert.Activated"
+        }
+      ]
+    },
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "category": "SMART_HOME",
+      "distributionCountries": [],
+      "isAvailableWorldwide": true,
+      "locales": {
+        "en-US": {
+          "description": "Proactive notifications for the smart home",
+          "examplePhrases": [
+            "Alexa, open home notifications"
+          ],
+          "keywords": [],
+          "name": "Home",
+          "summary": "Skill for local proactive notifications"
+        },
+        "en-GB": {
+          "description": "Proactive notifications for the smart home",
+          "examplePhrases": [
+            "Alexa, open home notifications"
+          ],
+          "keywords": [],
+          "name": "Home",
+          "summary": "Skill for local proactive notifications"
+        },
+        "es-ES": {
+          "description": "Notificaciones proactivas para el hogar",
+          "examplePhrases": [
+            "Alexa, abre notificaciones casa"
+          ],
+          "keywords": [],
+          "name": "Casa",
+          "summary": "Skill para notificaciones locales"
+        },
+        "de-DE": {
+          "description": "Proaktive Benachrichtigungen für das Smart Home",
+          "examplePhrases": [
+            "Alexa, öffne Heimbenachrichtigungen"
+          ],
+          "keywords": [],
+          "name": "Zuhause",
+          "summary": "Skill für lokale proaktive Benachrichtigungen"
+        },
+        "fr-FR": {
+          "description": "Notifications proactives pour la maison connectée",
+          "examplePhrases": [
+            "Alexa, ouvre notifications maison"
+          ],
+          "keywords": [],
+          "name": "Maison",
+          "summary": "Skill pour les notifications locales"
+        },
+        "it-IT": {
+          "description": "Notifiche proattive per la smart home",
+          "examplePhrases": [
+            "Alexa, apri notifiche casa"
+          ],
+          "keywords": [],
+          "name": "Casa",
+          "summary": "Skill per notifiche locali"
+        },
+        "pt-BR": {
+          "description": "Notificações proativas para a casa inteligente",
+          "examplePhrases": [
+            "Alexa, abra notificações da casa"
+          ],
+          "keywords": [],
+          "name": "Casa",
+          "summary": "Skill para notificações locais"
+        },
+        "ja-JP": {
+          "description": "スマートホーム向けプロアクティブ通知",
+          "examplePhrases": [
+            "アレクサ、ホーム通知を開いて"
+          ],
+          "keywords": [],
+          "name": "ホーム",
+          "summary": "ローカルプロアクティブ通知スキル"
+        }
+      },
+      "testingInstructions": "Private skill for proactive notifications."
+    }
+  }
+}
