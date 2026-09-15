@@ -178,6 +178,26 @@ data:
   message: "La lavadora ha terminado"
 ```
 
+4. **(Opcional) Script para la interfaz visual:**
+   Para que sea mucho más fácil usarlo desde el editor visual de automatizaciones, puedes crear un script. Ve a **Ajustes > Automatizaciones y escenas > Scripts**, crea un nuevo script, haz clic en los tres puntos de la esquina superior derecha y selecciona **"Editar en YAML"**. Borra lo que haya y pega esto:
+
+   ```yaml
+   alias: "Notificar por Alexa"
+   icon: mdi:bell-circle-outline
+   fields:
+     message:
+       name: Mensaje
+       description: "El texto que leerá Alexa"
+       required: true
+       selector:
+         text:
+   sequence:
+     - action: rest_command.alexa_notify
+       data:
+         message: "{{ message }}"
+   ```
+   *Ahora podrás seleccionar la acción "Notificar por Alexa" en tus automatizaciones y te aparecerá un cuadro de texto para escribir el mensaje directamente.*
+
 ---
 
 ## 6. Actualización

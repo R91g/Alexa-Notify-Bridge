@@ -178,6 +178,26 @@ data:
   message: "The washing machine has finished"
 ```
 
+4. **(Optional) UI-Friendly Script:**
+   To make it easier to use from the visual Automation editor, you can create a script. Go to **Settings > Automations & scenes > Scripts**, create a new script, click the three dots in the top right corner and select **"Edit in YAML"**. Clear the existing code and paste this:
+
+   ```yaml
+   alias: "Notify via Alexa"
+   icon: mdi:bell-circle-outline
+   fields:
+     message:
+       name: Message
+       description: "The text Alexa will read aloud"
+       required: true
+       selector:
+         text:
+   sequence:
+     - action: rest_command.alexa_notify
+       data:
+         message: "{{ message }}"
+   ```
+   *Now you can just select the "Notify via Alexa" action in your automations and it will give you a simple text box!*
+
 ---
 
 ## 6. Updating
