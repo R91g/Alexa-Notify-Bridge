@@ -52,7 +52,7 @@ rest_command:
       Content-Type: "application/json"
       # x-api-key: "your_api_key"  # Uncomment if you set an API Key
     payload: >-
-      {"creator_name": {{ message | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours }}{% endif %}}
+      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}}
 ```
 
 > **Note:** Replace `<YOUR_HOME_ASSISTANT_IP>` with the local IP address of your Home Assistant server (e.g., `http://192.168.1.50:8080/notify`). Do not use `localhost` because Home Assistant Core and add-ons run in separate Docker container network namespaces.
