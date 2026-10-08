@@ -14,3 +14,6 @@ configuration:
   log_level:
     name: "Nivel de log"
     description: "Nivel de registro de la aplicación: DEBUG, INFO, WARNING o ERROR"
+  default_expiry_hours:
+    name: "Expiración de notificaciones (horas)"
+    description: "Tiempo que las notificaciones permanecen activas antes de expirar (0.1–24 horas). Por defecto: 24h. Se puede personalizar por petición."

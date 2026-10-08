@@ -4,6 +4,7 @@ import os
 import secrets
 import time
 import uuid
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -66,6 +67,8 @@ PROACTIVE_EVENTS_URL = os.getenv(
     "https://api.eu.amazonalexa.com/v1/proactiveEvents/stages/development",
 )
 
+DEFAULT_EXPIRY_HOURS = float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
+
 # ─── Request model ──────────────────────────────────────────────────────────
 
 
@@ -79,6 +82,13 @@ class NotificationRequest(BaseModel):
         description="The text Alexa will read aloud (the 'creator' trick).",
     )
     urgency: Literal["URGENT"] = "URGENT"
+    expiry_hours: float | None = Field(
+        default=None,
+        gt=0,
+        le=24,
+        description="Hours until the notification expires (max 24). "
+        "If omitted, uses the DEFAULT_EXPIRY_HOURS setting (default: 24h).",
+    )
 
 
 # ─── Token cache ────────────────────────────────────────────────────────────
@@ -169,6 +179,18 @@ class RateLimiter:
 rate_limiter = RateLimiter(max_requests=10, window_seconds=10.0)
 
 
+# ─── Retry configuration ───────────────────────────────────────────────────
+
+MAX_RETRIES = 1
+RETRY_DELAY_S = 2.0
+
+
+# ─── Notification history (in-memory, last N entries) ──────────────────────
+
+MAX_HISTORY = 50
+notification_history: deque[dict] = deque(maxlen=MAX_HISTORY)
+
+
 # ─── App lifespan (startup / shutdown) ──────────────────────────────────────
 
 
@@ -225,6 +247,12 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/history")
+async def get_history(_api_key: str = Depends(verify_api_key)):
+    """Return the last notifications sent (most recent first, in-memory only)."""
+    return {"count": len(notification_history), "notifications": list(notification_history)}
+
+
 @app.post("/notify")
 async def notify(
     request: NotificationRequest,
@@ -244,7 +272,8 @@ async def notify(
     # Build ISO 8601 timestamps
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
-    expiry_dt = now + timedelta(hours=1)
+    hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
+    expiry_dt = now + timedelta(hours=hours)
     expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
 
     reference_id = str(uuid.uuid4())
@@ -276,27 +305,53 @@ async def notify(
     }
 
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                PROACTIVE_EVENTS_URL, headers=headers, json=event_payload
-            )
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            logger.error(
-                "Alexa API rejected the request (%s): %s",
-                exc.response.status_code,
-                exc.response.text,
-            )
-            raise HTTPException(
-                status_code=exc.response.status_code,
-                detail=f"Alexa API error: {exc.response.text}",
-            )
-        except httpx.HTTPError as exc:
-            logger.error("Network error sending proactive event: %s", exc)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to send proactive event: {exc}",
-            )
+        for attempt in range(1 + MAX_RETRIES):
+            try:
+                response = await client.post(
+                    PROACTIVE_EVENTS_URL, headers=headers, json=event_payload
+                )
+                response.raise_for_status()
+                break  # Success — exit retry loop
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code >= 500 and attempt < MAX_RETRIES:
+                    logger.warning(
+                        "Amazon API error (%s), retrying in %.0fs...",
+                        exc.response.status_code,
+                        RETRY_DELAY_S,
+                    )
+                    await asyncio.sleep(RETRY_DELAY_S)
+                    continue
+                logger.error(
+                    "Alexa API rejected the request (%s): %s",
+                    exc.response.status_code,
+                    exc.response.text,
+                )
+                raise HTTPException(
+                    status_code=exc.response.status_code,
+                    detail=f"Alexa API error: {exc.response.text}",
+                )
+            except httpx.HTTPError as exc:
+                if attempt < MAX_RETRIES:
+                    logger.warning(
+                        "Network error, retrying in %.0fs: %s",
+                        RETRY_DELAY_S,
+                        exc,
+                    )
+                    await asyncio.sleep(RETRY_DELAY_S)
+                    continue
+                logger.error("Network error sending proactive event: %s", exc)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to send proactive event: {exc}",
+                )
+
+    # Store in history (most recent first)
+    notification_history.appendleft({
+        "timestamp": timestamp,
+        "message": request.creator_name,
+        "expiry_hours": hours,
+        "reference_id": reference_id,
+    })
 
     logger.info("Notification sent: %s", request.creator_name)
     return {"status": "success", "message": "Notification sent successfully"}

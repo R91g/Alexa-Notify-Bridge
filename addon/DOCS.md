@@ -29,6 +29,7 @@ After installing the add-on, go to the **Configuration** tab and fill in the fol
 | **API Key** | ❌ | *(empty)* | Optional password to protect the `/notify` endpoint |
 | **Region** | ✅ | `EU` | Your Amazon region: `NA` (North America), `EU` (Europe), `FE` (Far East) |
 | **Log Level** | ✅ | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING` or `ERROR` |
+| **Default Notification Expiry** | ✅ | `24` | Hours until notifications expire (0.1–24). Can be overridden per request |
 
 > **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify` must include the header `x-api-key: your_key`.
 
@@ -91,6 +92,7 @@ sequence:
 |----------|--------|-------------|
 | `/notify` | `POST` | Send a proactive notification to Alexa |
 | `/health` | `GET` | Health check (returns `{"status": "ok"}`) |
+| `/history` | `GET` | Returns the last 50 notifications sent (in-memory, most recent first) |
 
 ### POST `/notify` — Request body
 
@@ -98,6 +100,7 @@ sequence:
 |-------|------|----------|---------|-------------|
 | `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (max 256 characters) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
+| `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (max 24). Overrides the global default |
 
 ---
 
@@ -118,6 +121,12 @@ When you ask *"Alexa, what are my notifications?"*, it will say:
 ## Rate Limiting
 
 To prevent temporary bans from Amazon, the bridge limits requests to **10 notifications per 10-second window**. Exceeding this returns HTTP `429 Too Many Requests`.
+
+---
+
+## Automatic Retries
+
+If Amazon's API returns a server error (5xx) or a network error occurs, the bridge will **automatically retry once** after a 2-second delay before reporting a failure.
 
 ---
 

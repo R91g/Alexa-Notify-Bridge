@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- Configurable notification expiry: default 24h (was 1h), adjustable globally or per request via `expiry_hours`.
+- Automatic retry on transient Amazon API errors (1 retry after 2s delay).
+- New `/history` endpoint: returns the last 50 sent notifications (in-memory).
+
 ## 1.0.2
 
 - Add custom AppArmor profile to elevate security rating to 6.

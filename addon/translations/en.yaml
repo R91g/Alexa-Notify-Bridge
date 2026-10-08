@@ -14,3 +14,6 @@ configuration:
   log_level:
     name: "Log Level"
     description: "Application log level: DEBUG, INFO, WARNING or ERROR"
+  default_expiry_hours:
+    name: "Default Notification Expiry (hours)"
+    description: "How long notifications remain active before expiring (0.1–24 hours). Default: 24h. Can be overridden per request."

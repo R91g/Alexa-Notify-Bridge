@@ -28,6 +28,9 @@ esac
 # Log level
 export LOG_LEVEL="$(bashio::config 'log_level')"
 
+# Default notification expiry (hours)
+export DEFAULT_EXPIRY_HOURS="$(bashio::config 'default_expiry_hours')"
+
 # ─── Start the bridge ───────────────────────────────────────────────────────
 
 bashio::log.info "Starting Alexa Notify Bridge..."

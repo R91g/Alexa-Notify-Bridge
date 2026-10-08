@@ -154,6 +154,7 @@ curl -X POST http://<IP_DEL_BRIDGE>:8080/notify \
 |----------|--------|-------------|
 | `/notify` | `POST` | Enviar una notificación proactiva a Alexa |
 | `/health` | `GET` | Health check (devuelve `{"status": "ok"}`) |
+| `/history` | `GET` | Devuelve las últimas 50 notificaciones enviadas (en memoria, más recientes primero) |
 
 #### POST `/notify` — Cuerpo de la petición
 
@@ -161,6 +162,7 @@ curl -X POST http://<IP_DEL_BRIDGE>:8080/notify \
 |-------|------|-----------|-------------|-------------|
 | `creator_name` | `string` | ✅ | — | El texto que Alexa leerá en voz alta (Máx. 256 caracteres) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Debe ser `"URGENT"` |
+| `expiry_hours` | `number` | ❌ | `24` | Horas hasta que la notificación expira (máx. 24). Sobreescribe el valor global |
 
 > **⏱️ Rate Limiting:** Para evitar baneos temporales por parte de Amazon (ej. si una automatización entra en bucle), el puente implementa un límite de **10 notificaciones por cada ventana de 10 segundos**. Si superas este límite, recibirás un error HTTP `429 Too Many Requests`.
 
@@ -227,7 +229,13 @@ data:
 
 ## 6. Actualización
 
-Si hay una nueva versión disponible en GitHub, puedes actualizar fácilmente sin perder tu configuración (tu archivo `.env` está a salvo porque está excluido en `.gitignore`):
+### Si usas el Add-on de Home Assistant (Recomendado)
+Home Assistant comprobará periódicamente el repositorio y **detectará las nuevas versiones de forma automática**. Cuando haya una actualización disponible:
+1. Te aparecerá una notificación de actualización pendiente en tu panel de control o en **Ajustes > Complementos**.
+2. Simplemente entra en la ficha de **Alexa Notify Bridge** y haz clic en **Actualizar**. Toda tu configuración se mantendrá intacta.
+
+### Si usas Docker Independiente
+Si hay una nueva versión disponible en GitHub, puedes actualizar manualmente desde la terminal sin perder tu configuración (tu archivo `.env` está a salvo porque está excluido en `.gitignore`):
 
 1. Entra en la carpeta del proyecto en tu servidor:
    ```bash

@@ -154,6 +154,7 @@ curl -X POST http://<BRIDGE_IP>:8080/notify \
 |----------|--------|-------------|
 | `/notify` | `POST` | Send a proactive notification to Alexa |
 | `/health` | `GET` | Health check (returns `{"status": "ok"}`) |
+| `/history` | `GET` | Returns the last 50 notifications sent (in-memory, most recent first) |
 
 #### POST `/notify` — Request body
 
@@ -161,6 +162,7 @@ curl -X POST http://<BRIDGE_IP>:8080/notify \
 |-------|------|----------|---------|-------------|
 | `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (Max 256 characters) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
+| `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (max 24). Overrides the default |
 
 > **⏱️ Rate Limiting:** To prevent temporary bans from Amazon (e.g., if an automation loops), the bridge enforces a limit of **10 notifications per 10-second window**. Exceeding this limit will return an HTTP `429 Too Many Requests` error.
 
@@ -227,7 +229,13 @@ data:
 
 ## 6. Updating
 
-If new versions are released, you can easily update your bridge without losing your configuration (your `.env` file is safe because it is excluded in `.gitignore`):
+### Home Assistant Add-on (Recommended)
+Home Assistant periodically checks the repository and **detects new versions automatically**. When an update is released:
+1. An update notification will appear in your dashboard or under **Settings > Add-ons**.
+2. Simply open the **Alexa Notify Bridge** add-on page and click **Update**. Your configuration will remain untouched.
+
+### Standalone Docker
+If a new version is released on GitHub, you can update manually from the terminal without losing your configuration (your `.env` file is safe because it is excluded in `.gitignore`):
 
 1. Enter the project folder on your server:
    ```bash
