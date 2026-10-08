@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- Add custom AppArmor profile to elevate security rating to 6.
+
 ## 1.0.1
 
 - Fix `s6-overlay-suexec` PID 1 error by setting `init: false` in add-on configuration.

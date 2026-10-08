@@ -1,5 +1,5 @@
 name: "Alexa Notify Bridge"
-version: "1.0.1"
+version: "1.0.2"
 slug: "alexa_notify_bridge"
 description: "Send custom proactive notifications to your Alexa devices via local HTTP requests"
 url: "https://github.com/R91g/Alexa-Notify-Bridge"
