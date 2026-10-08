@@ -100,7 +100,7 @@ sequence:
 |-------|------|----------|---------|-------------|
 | `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (max 256 characters) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
-| `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (max 24). Overrides the global default |
+| `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (clamped automatically between 5 min and 24h) |
 
 ---
 

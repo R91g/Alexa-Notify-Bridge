@@ -162,7 +162,7 @@ curl -X POST http://<IP_DEL_BRIDGE>:8080/notify \
 |-------|------|-----------|-------------|-------------|
 | `creator_name` | `string` | ✅ | — | El texto que Alexa leerá en voz alta (Máx. 256 caracteres) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Debe ser `"URGENT"` |
-| `expiry_hours` | `number` | ❌ | `24` | Horas hasta que la notificación expira (máx. 24). Sobreescribe el valor global |
+| `expiry_hours` | `number` | ❌ | `24` | Horas hasta que la notificación expira (acotado automáticamente entre 5 min y 24h) |
 
 > **⏱️ Rate Limiting:** Para evitar baneos temporales por parte de Amazon (ej. si una automatización entra en bucle), el puente implementa un límite de **10 notificaciones por cada ventana de 10 segundos**. Si superas este límite, recibirás un error HTTP `429 Too Many Requests`.
 

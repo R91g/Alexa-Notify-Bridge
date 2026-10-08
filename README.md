@@ -162,7 +162,7 @@ curl -X POST http://<BRIDGE_IP>:8080/notify \
 |-------|------|----------|---------|-------------|
 | `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (Max 256 characters) |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
-| `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (max 24). Overrides the default |
+| `expiry_hours` | `number` | ❌ | `24` | Hours until notification expires (clamped automatically between 5 min and 24h) |
 
 > **⏱️ Rate Limiting:** To prevent temporary bans from Amazon (e.g., if an automation loops), the bridge enforces a limit of **10 notifications per 10-second window**. Exceeding this limit will return an HTTP `429 Too Many Requests` error.
 

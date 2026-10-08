@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Automatically clamp notification expiry between 5 minutes and 24 hours (Amazon's allowed limits), preventing errors if out-of-range values are passed.
+
 ## 1.1.0
 
 - Configurable notification expiry: default 24h (was 1h), adjustable globally or per request via `expiry_hours`.

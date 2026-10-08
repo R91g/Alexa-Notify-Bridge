@@ -67,7 +67,19 @@ PROACTIVE_EVENTS_URL = os.getenv(
     "https://api.eu.amazonalexa.com/v1/proactiveEvents/stages/development",
 )
 
-DEFAULT_EXPIRY_HOURS = float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
+# Amazon Proactive Events requires expiry to be between 5 minutes and 24 hours.
+MIN_EXPIRY_HOURS = 5 / 60  # 5 minutes (~0.0833 hours)
+MAX_EXPIRY_HOURS = 24.0   # 24 hours
+
+
+def clamp_expiry_hours(hours: float) -> float:
+    """Clamp expiry to Amazon's allowed range (5 minutes to 24 hours)."""
+    return max(MIN_EXPIRY_HOURS, min(MAX_EXPIRY_HOURS, hours))
+
+
+DEFAULT_EXPIRY_HOURS = clamp_expiry_hours(
+    float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
+)
 
 # ─── Request model ──────────────────────────────────────────────────────────
 
@@ -84,9 +96,8 @@ class NotificationRequest(BaseModel):
     urgency: Literal["URGENT"] = "URGENT"
     expiry_hours: float | None = Field(
         default=None,
-        gt=0,
-        le=24,
-        description="Hours until the notification expires (max 24). "
+        description="Hours until the notification expires (5 min to 24h). "
+        "Values under 5 min are adjusted to 5 min; values over 24h are capped at 24h. "
         "If omitted, uses the DEFAULT_EXPIRY_HOURS setting (default: 24h).",
     )
 
@@ -272,7 +283,14 @@ async def notify(
     # Build ISO 8601 timestamps
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
-    hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
+    raw_hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
+    hours = clamp_expiry_hours(raw_hours)
+    if request.expiry_hours is not None and hours != raw_hours:
+        logger.debug(
+            "Expiry hours adjusted from %s to %.4f (clamped between 5m and 24h)",
+            raw_hours,
+            hours,
+        )
     expiry_dt = now + timedelta(hours=hours)
     expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
 
@@ -349,7 +367,7 @@ async def notify(
     notification_history.appendleft({
         "timestamp": timestamp,
         "message": request.creator_name,
-        "expiry_hours": hours,
+        "expiry_hours": round(hours, 2),
         "reference_id": reference_id,
     })
 
