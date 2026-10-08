@@ -2,7 +2,11 @@
 
 ## 1.1.1
 
-- Automatically clamp notification expiry between 5 minutes and 24 hours (Amazon's allowed limits), preventing errors if out-of-range values are passed.
+- Automatically clamp notification expiry between 5 minutes and 24 hours (Amazon's allowed limits) with clear warning logs when adjusted.
+- Auto-recovery: refresh expired access tokens automatically on 401 errors and retry.
+- Enhanced `/notify` response: now includes `reference_id` and effective `expiry_hours`.
+- Enhanced `/history`: added optional `?limit=N` query parameter.
+- Home Assistant integration: updated `rest_command` and UI script examples to support `expiry_hours`.
 
 ## 1.1.0
 

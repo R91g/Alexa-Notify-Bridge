@@ -51,7 +51,8 @@ rest_command:
     headers:
       Content-Type: "application/json"
       # x-api-key: "your_api_key"  # Uncomment if you set an API Key
-    payload: '{"creator_name": "{{ message }}"}'
+    payload: >-
+      {"creator_name": {{ message | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours }}{% endif %}}
 ```
 
 > **Note:** Replace `<YOUR_HOME_ASSISTANT_IP>` with the local IP address of your Home Assistant server (e.g., `http://192.168.1.50:8080/notify`). Do not use `localhost` because Home Assistant Core and add-ons run in separate Docker container network namespaces.
@@ -59,9 +60,16 @@ rest_command:
 After restarting Home Assistant, you can use it in any automation or script:
 
 ```yaml
+# Standard notification (uses default 24h expiry):
 action: rest_command.alexa_notify
 data:
   message: "The washing machine has finished"
+
+# Notification with custom expiry (e.g., expires in 15 minutes):
+action: rest_command.alexa_notify
+data:
+  message: "The garage door is still open"
+  expiry_hours: 0.25
 ```
 
 ### Optional: UI-Friendly Script
@@ -78,10 +86,21 @@ fields:
     required: true
     selector:
       text:
+  expiry_hours:
+    name: Expiry Hours
+    description: "Hours before notification expires (optional, default: 24h)"
+    required: false
+    selector:
+      number:
+        min: 0.1
+        max: 24
+        step: 0.5
+        unit_of_measurement: h
 sequence:
   - action: rest_command.alexa_notify
     data:
       message: "{{ message }}"
+      expiry_hours: "{{ expiry_hours | default(none) }}"
 ```
 
 ---
@@ -92,7 +111,7 @@ sequence:
 |----------|--------|-------------|
 | `/notify` | `POST` | Send a proactive notification to Alexa |
 | `/health` | `GET` | Health check (returns `{"status": "ok"}`) |
-| `/history` | `GET` | Returns the last 50 notifications sent (in-memory, most recent first) |
+| `/history` | `GET` | Returns in-memory notification history (most recent first). Supports `?limit=N` (default 50) |
 
 ### POST `/notify` — Request body
 

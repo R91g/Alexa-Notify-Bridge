@@ -77,9 +77,15 @@ def clamp_expiry_hours(hours: float) -> float:
     return max(MIN_EXPIRY_HOURS, min(MAX_EXPIRY_HOURS, hours))
 
 
-DEFAULT_EXPIRY_HOURS = clamp_expiry_hours(
-    float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
-)
+_raw_default_expiry = float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
+DEFAULT_EXPIRY_HOURS = clamp_expiry_hours(_raw_default_expiry)
+if DEFAULT_EXPIRY_HOURS != _raw_default_expiry:
+    _adjusted_desc = "5 minutes (minimum)" if DEFAULT_EXPIRY_HOURS == MIN_EXPIRY_HOURS else "24 hours (maximum)"
+    logger.warning(
+        "Configured DEFAULT_EXPIRY_HOURS (%s) is outside Amazon's limits (5 min to 24h). Adjusted to %s.",
+        _raw_default_expiry,
+        _adjusted_desc,
+    )
 
 # ─── Request model ──────────────────────────────────────────────────────────
 
@@ -120,11 +126,11 @@ class TokenCache:
 token_cache = TokenCache()
 
 
-async def get_access_token() -> str:
+async def get_access_token(force_refresh: bool = False) -> str:
     """Obtain a valid Amazon LWA access token, using the cache when possible."""
     now = time.time()
 
-    if token_cache.token and token_cache.expires_at > now:
+    if not force_refresh and token_cache.token and token_cache.expires_at > now:
         return token_cache.token
 
     if not ALEXA_CLIENT_ID or not ALEXA_CLIENT_SECRET:
@@ -259,9 +265,18 @@ async def health():
 
 
 @app.get("/history")
-async def get_history(_api_key: str = Depends(verify_api_key)):
+async def get_history(
+    limit: int = 50,
+    _api_key: str = Depends(verify_api_key),
+):
     """Return the last notifications sent (most recent first, in-memory only)."""
-    return {"count": len(notification_history), "notifications": list(notification_history)}
+    safe_limit = max(1, min(limit, MAX_HISTORY))
+    items = list(notification_history)[:safe_limit]
+    return {
+        "count": len(items),
+        "total": len(notification_history),
+        "notifications": items,
+    }
 
 
 @app.post("/notify")
@@ -286,10 +301,15 @@ async def notify(
     raw_hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
     hours = clamp_expiry_hours(raw_hours)
     if request.expiry_hours is not None and hours != raw_hours:
-        logger.debug(
-            "Expiry hours adjusted from %s to %.4f (clamped between 5m and 24h)",
+        adjusted_desc = (
+            "5 minutes (minimum allowed)"
+            if hours == MIN_EXPIRY_HOURS
+            else "24 hours (maximum allowed)"
+        )
+        logger.warning(
+            "Notification expiry of %s hours is outside Amazon's limits (5 min to 24h). Adjusted to %s.",
             raw_hours,
-            hours,
+            adjusted_desc,
         )
     expiry_dt = now + timedelta(hours=hours)
     expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
@@ -331,6 +351,13 @@ async def notify(
                 response.raise_for_status()
                 break  # Success — exit retry loop
             except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 401 and attempt < MAX_RETRIES:
+                    logger.warning(
+                        "Amazon access token rejected (401), refreshing token and retrying..."
+                    )
+                    token = await get_access_token(force_refresh=True)
+                    headers["Authorization"] = f"Bearer {token}"
+                    continue
                 if exc.response.status_code >= 500 and attempt < MAX_RETRIES:
                     logger.warning(
                         "Amazon API error (%s), retrying in %.0fs...",
@@ -372,4 +399,9 @@ async def notify(
     })
 
     logger.info("Notification sent: %s", request.creator_name)
-    return {"status": "success", "message": "Notification sent successfully"}
+    return {
+        "status": "success",
+        "message": "Notification sent successfully",
+        "reference_id": reference_id,
+        "expiry_hours": round(hours, 2),
+    }

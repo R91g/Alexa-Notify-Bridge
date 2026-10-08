@@ -154,7 +154,7 @@ curl -X POST http://<BRIDGE_IP>:8080/notify \
 |----------|--------|-------------|
 | `/notify` | `POST` | Send a proactive notification to Alexa |
 | `/health` | `GET` | Health check (returns `{"status": "ok"}`) |
-| `/history` | `GET` | Returns the last 50 notifications sent (in-memory, most recent first) |
+| `/history` | `GET` | Returns in-memory notification history (most recent first). Supports `?limit=N` (default 50) |
 
 #### POST `/notify` — Request body
 
@@ -191,7 +191,8 @@ rest_command:
     headers:
       Content-Type: "application/json"
       # x-api-key: "your_secret_api_key"  # Uncomment if you use API_KEY
-    payload: '{"creator_name": "{{ message }}"}'
+    payload: >-
+      {"creator_name": {{ message | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours }}{% endif %}}
 ```
 
 > **📌 Note on URL:** Replace `<SERVER_IP>` with the local IP of your server (e.g., `http://192.168.1.50:8080/notify`). If using the **Add-on**, use the local IP of your Home Assistant host (do not use `localhost` because Home Assistant Core and add-ons run in isolated Docker network namespaces). If using **standalone Docker**, use the IP of the machine running the container.
@@ -200,9 +201,16 @@ rest_command:
 3. Now you can use it in any automation or script like this:
 
 ```yaml
+# Standard notification (uses default 24h expiry):
 action: rest_command.alexa_notify
 data:
   message: "The washing machine has finished"
+
+# Notification with custom expiry (e.g., expires in 15 minutes):
+action: rest_command.alexa_notify
+data:
+  message: "The garage door is still open"
+  expiry_hours: 0.25
 ```
 
 4. **(Optional) UI-Friendly Script:**
@@ -218,12 +226,23 @@ data:
        required: true
        selector:
          text:
+     expiry_hours:
+       name: Expiry Hours
+       description: "Hours before notification expires (optional, default: 24h)"
+       required: false
+       selector:
+         number:
+           min: 0.1
+           max: 24
+           step: 0.5
+           unit_of_measurement: h
    sequence:
      - action: rest_command.alexa_notify
        data:
          message: "{{ message }}"
+         expiry_hours: "{{ expiry_hours | default(none) }}"
    ```
-   *Now you can just select the "Notify via Alexa" action in your automations and it will give you a simple text box!*
+   *Now you can select the "Notify via Alexa" action in your automations and get a text box for the message plus an optional expiry selector!*
 
 ---
 
