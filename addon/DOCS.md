@@ -45,7 +45,7 @@ The cleanest way to use this add-on is by creating a `rest_command`. Add the fol
 ```yaml
 rest_command:
   alexa_notify:
-    url: "http://localhost:8080/notify"
+    url: "http://<YOUR_HOME_ASSISTANT_IP>:8080/notify"
     method: POST
     headers:
       Content-Type: "application/json"
@@ -53,7 +53,7 @@ rest_command:
     payload: '{"creator_name": "{{ message }}"}'
 ```
 
-> **Note:** Since the add-on runs on the same machine as Home Assistant, use `localhost` instead of an IP address.
+> **Note:** Replace `<YOUR_HOME_ASSISTANT_IP>` with the local IP address of your Home Assistant server (e.g., `http://192.168.1.50:8080/notify`). Do not use `localhost` because Home Assistant Core and add-ons run in separate Docker container network namespaces.
 
 After restarting Home Assistant, you can use it in any automation or script:
 

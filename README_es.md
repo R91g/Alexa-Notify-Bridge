@@ -184,7 +184,7 @@ La forma más limpia y centralizada de usar este puente desde Home Assistant es 
 ```yaml
 rest_command:
   alexa_notify:
-    url: "http://<IP_DEL_BRIDGE>:8080/notify"    # Si usas el add-on, usa http://localhost:8080/notify
+    url: "http://<IP_DEL_SERVIDOR>:8080/notify"
     method: POST
     headers:
       Content-Type: "application/json"
@@ -192,7 +192,7 @@ rest_command:
     payload: '{"creator_name": "{{ message }}"}'
 ```
 
-> **🏠 Usuarios del add-on:** Si instalaste el complemento (Opción A), usa `http://localhost:8080/notify` como URL, ya que el puente se ejecuta en la misma máquina que Home Assistant.
+> **📌 Nota sobre la URL:** Reemplaza `<IP_DEL_SERVIDOR>` por la IP local de tu servidor (ej. `http://192.168.1.50:8080/notify`). Si usas el **Add-on**, pon la IP local de tu máquina de Home Assistant (no uses `localhost` porque Home Assistant Core y el Add-on se ejecutan en contenedores Docker aislados). Si usas **Docker independiente**, pon la IP de la máquina donde esté corriendo el contenedor.
 
 2. Reinicia Home Assistant para aplicar los cambios.
 3. Ahora puedes usarlo en cualquier automatización o script así:
