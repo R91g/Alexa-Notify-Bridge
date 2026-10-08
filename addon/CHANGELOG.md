@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1
+
+- Fix `s6-overlay-suexec` PID 1 error by setting `init: false` in add-on configuration.
+- Enforce LF line endings for shell scripts.
+
 ## 1.0.0
 
 - Initial release as Home Assistant add-on
