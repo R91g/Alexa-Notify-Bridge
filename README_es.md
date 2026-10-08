@@ -14,6 +14,7 @@ Es ideal para integrarlo con sistemas de domótica (Home Assistant, Node-RED, et
 
 *   🚀 **Fácil de usar:** Envía una simple petición HTTP POST a nivel local para generar una notificación en tu cuenta de Alexa.
 *   🐳 **Dockerizado:** Listo para levantar en segundos con Docker Compose.
+*   🏠 **Add-on de Home Assistant:** Instala directamente desde Home Assistant con una interfaz gráfica de configuración.
 *   🔒 **Privacidad:** No dependes de servidores de terceros (salvo la propia API de Amazon); tus credenciales se quedan en tu servidor local.
 *   🩺 **Health check:** Endpoint `/health` incorporado para monitorización y Docker health checks.
 
@@ -21,9 +22,9 @@ Es ideal para integrarlo con sistemas de domótica (Home Assistant, Node-RED, et
 
 ## 1. Requisitos Previos
 
-*   [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/).
-*   [Node.js](https://nodejs.org/) (necesario solo para la instalación de `ask-cli`).
 *   Una cuenta de [Amazon Developer](https://developer.amazon.com/alexa).
+*   [Node.js](https://nodejs.org/) (necesario solo para la instalación de `ask-cli`).
+*   **Solo para instalación con Docker:** [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/).
 
 ---
 
@@ -81,7 +82,29 @@ Para que tu altavoz te notifique, necesitas decirle a Alexa que quieres usar est
 
 ---
 
-## 3. Instalación del servicio (Bridge)
+## 3. Instalación
+
+Elige el método que mejor se adapte a tu entorno:
+
+### Opción A: Add-on de Home Assistant (Recomendado)
+
+La forma más sencilla si ya usas Home Assistant.
+
+1. En Home Assistant, ve a **Ajustes > Complementos > Tienda de complementos**.
+2. Haz clic en los tres puntos (⋮) de la esquina superior derecha y selecciona **Repositorios**.
+3. Añade esta URL de repositorio:
+   ```
+   https://github.com/R91g/Alexa-Notify-Bridge
+   ```
+4. Busca **Alexa Notify Bridge** en la tienda de complementos y pulsa **Instalar**.
+5. Ve a la pestaña **Configuración** e introduce tus credenciales (Client ID, Client Secret), elige tu región y establece una API Key opcional.
+6. Pulsa **Iniciar**.
+
+> **📖 Documentación completa:** Una vez instalado, la pestaña **Documentación** del complemento contiene instrucciones detalladas de uso, incluyendo configuración de `rest_command` y ejemplos de automatizaciones.
+
+### Opción B: Docker Independiente
+
+Para servidores sin Home Assistant, o si prefieres gestionar los contenedores Docker directamente.
 
 1. Clona este repositorio en tu servidor y entra en la carpeta:
    ```bash
@@ -161,13 +184,15 @@ La forma más limpia y centralizada de usar este puente desde Home Assistant es 
 ```yaml
 rest_command:
   alexa_notify:
-    url: "http://<IP_DEL_BRIDGE>:8080/notify"
+    url: "http://<IP_DEL_BRIDGE>:8080/notify"    # Si usas el add-on, usa http://localhost:8080/notify
     method: POST
     headers:
       Content-Type: "application/json"
-      # x-api-key: "tu_api_key_secreta"  # Descomenta si usas API_KEY en el .env
+      # x-api-key: "tu_api_key_secreta"  # Descomenta si usas API_KEY
     payload: '{"creator_name": "{{ message }}"}'
 ```
+
+> **🏠 Usuarios del add-on:** Si instalaste el complemento (Opción A), usa `http://localhost:8080/notify` como URL, ya que el puente se ejecuta en la misma máquina que Home Assistant.
 
 2. Reinicia Home Assistant para aplicar los cambios.
 3. Ahora puedes usarlo en cualquier automatización o script así:

@@ -11,3 +11,5 @@ docker-compose.override.yml
 .dockerignore
 .venv/
 venv/
+addon/
+repository.yaml

@@ -1,0 +1,33 @@
+name: "Alexa Notify Bridge"
+version: "1.0.0"
+slug: "alexa_notify_bridge"
+description: "Send custom proactive notifications to your Alexa devices via local HTTP requests"
+url: "https://github.com/R91g/Alexa-Notify-Bridge"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: services
+boot: auto
+ports:
+  "8080/tcp": 8080
+ports_description:
+  "8080/tcp": "Bridge API port"
+map:
+  - share:rw
+
+# ─── User-configurable options (defaults) ────────────────────────────────────
+options:
+  alexa_client_id: ""
+  alexa_client_secret: ""
+  api_key: ""
+  region: "EU"
+  log_level: "INFO"
+
+# ─── Validation schema ──────────────────────────────────────────────────────
+schema:
+  alexa_client_id: "str"
+  alexa_client_secret: "password"
+  api_key: "password?"
+  region: "match(^(NA|EU|FE)$)"
+  log_level: "match(^(DEBUG|INFO|WARNING|ERROR)$)"

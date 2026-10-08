@@ -1,0 +1,16 @@
+configuration:
+  alexa_client_id:
+    name: "Alexa Client ID"
+    description: "Your Alexa Skill Client ID (found in the Alexa Developer Console → Build → Permissions)"
+  alexa_client_secret:
+    name: "Alexa Client Secret"
+    description: "Your Alexa Skill Client Secret (found in the Alexa Developer Console → Build → Permissions)"
+  api_key:
+    name: "API Key"
+    description: "Optional password to protect the /notify endpoint. If set, include it as 'x-api-key' header in your requests."
+  region:
+    name: "Amazon API Region"
+    description: "Your Amazon Alexa region: NA (North America), EU (Europe), FE (Far East)"
+  log_level:
+    name: "Log Level"
+    description: "Application log level: DEBUG, INFO, WARNING or ERROR"

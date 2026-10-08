@@ -1,0 +1,302 @@
+import asyncio
+import logging
+import os
+import secrets
+import time
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+
+from fastapi import FastAPI, HTTPException, Security, Depends, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
+from pydantic import BaseModel, Field
+import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# ─── Logging ─────────────────────────────────────────────────────────────────
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("alexa-notify-bridge")
+
+# ─── Alexa credentials ──────────────────────────────────────────────────────
+
+ALEXA_CLIENT_ID = os.getenv("ALEXA_CLIENT_ID")
+ALEXA_CLIENT_SECRET = os.getenv("ALEXA_CLIENT_SECRET")
+
+# ─── API Key security (optional, recommended) ───────────────────────────────
+# If API_KEY is set in .env, requests must include it in the "x-api-key" header.
+
+API_KEY = os.getenv("API_KEY")
+api_key_header_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
+
+if not API_KEY:
+    logger.warning(
+        "API_KEY is not set. The /notify endpoint is open without authentication. "
+        "Set API_KEY in your .env file to protect it."
+    )
+
+
+async def verify_api_key(key: str = Security(api_key_header_scheme)):
+    """Validate the API key if one is configured."""
+    if API_KEY:
+        if not key or not secrets.compare_digest(key, API_KEY):
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid or missing API key.",
+            )
+    return key
+
+
+# ─── Amazon endpoints ───────────────────────────────────────────────────────
+
+TOKEN_URL = "https://api.amazon.com/auth/o2/token"
+
+PROACTIVE_EVENTS_URL = os.getenv(
+    "PROACTIVE_EVENTS_URL",
+    "https://api.eu.amazonalexa.com/v1/proactiveEvents/stages/development",
+)
+
+# ─── Request model ──────────────────────────────────────────────────────────
+
+
+class NotificationRequest(BaseModel):
+    """Payload expected by the POST /notify endpoint."""
+
+    creator_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+        description="The text Alexa will read aloud (the 'creator' trick).",
+    )
+    urgency: Literal["URGENT"] = "URGENT"
+
+
+# ─── Token cache ────────────────────────────────────────────────────────────
+
+
+class TokenCache:
+    """Simple in-memory cache for the Amazon LWA access token.
+
+    Note: the cache is per-process. If you run multiple Uvicorn workers,
+    each worker will maintain its own token cache.
+    """
+
+    def __init__(self):
+        self.token: str | None = None
+        self.expires_at: float = 0
+
+
+token_cache = TokenCache()
+
+
+async def get_access_token() -> str:
+    """Obtain a valid Amazon LWA access token, using the cache when possible."""
+    now = time.time()
+
+    if token_cache.token and token_cache.expires_at > now:
+        return token_cache.token
+
+    if not ALEXA_CLIENT_ID or not ALEXA_CLIENT_SECRET:
+        logger.error("ALEXA_CLIENT_ID or ALEXA_CLIENT_SECRET not configured.")
+        raise HTTPException(
+            status_code=500,
+            detail="Alexa client credentials not configured. Set them in .env.",
+        )
+
+    async with httpx.AsyncClient() as client:
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": ALEXA_CLIENT_ID,
+            "client_secret": ALEXA_CLIENT_SECRET,
+            "scope": "alexa::proactive_events",
+        }
+        try:
+            response = await client.post(TOKEN_URL, data=data)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.error("Failed to obtain Amazon access token: %s", exc)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to get access token: {exc}",
+            )
+
+        token_data = response.json()
+        token_cache.token = token_data["access_token"]
+        # Subtract 60 s as a safety margin for network delays
+        token_cache.expires_at = now + token_data.get("expires_in", 3600) - 60
+
+        logger.info("Amazon access token refreshed successfully.")
+        return token_cache.token
+
+
+# ─── Rate limiter ───────────────────────────────────────────────────────────
+
+
+class RateLimiter:
+    """Prevents flooding Amazon's API by limiting requests in a sliding time window."""
+
+    def __init__(self, max_requests: int = 10, window_seconds: float = 10.0):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._timestamps: list[float] = []
+        self._lock = asyncio.Lock()
+
+    async def check(self):
+        async with self._lock:
+            now = time.time()
+            cutoff = now - self.window_seconds
+            # Remove timestamps outside the window
+            self._timestamps = [t for t in self._timestamps if t > cutoff]
+            if len(self._timestamps) >= self.max_requests:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit: max {self.max_requests} notifications "
+                    f"per {self.window_seconds:.0f}s. Please try again later.",
+                )
+            self._timestamps.append(now)
+
+
+rate_limiter = RateLimiter(max_requests=10, window_seconds=10.0)
+
+
+# ─── App lifespan (startup / shutdown) ──────────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run startup checks before the app begins accepting requests."""
+    if ALEXA_CLIENT_ID and ALEXA_CLIENT_SECRET:
+        try:
+            await get_access_token()
+            logger.info(
+                "Startup check passed: Amazon credentials are valid."
+            )
+        except Exception as exc:
+            logger.error(
+                "Startup check FAILED: could not authenticate with Amazon. "
+                "Verify ALEXA_CLIENT_ID and ALEXA_CLIENT_SECRET in your .env file. "
+                "Error: %s",
+                exc,
+            )
+    else:
+        logger.error(
+            "ALEXA_CLIENT_ID and/or ALEXA_CLIENT_SECRET not set in .env. "
+            "The bridge will NOT be able to send notifications."
+        )
+    yield
+
+
+# ─── FastAPI app ─────────────────────────────────────────────────────────────
+
+app = FastAPI(
+    title="Alexa Notify Bridge",
+    docs_url=None,   # Disable Swagger UI in production
+    redoc_url=None,   # Disable ReDoc in production
+    lifespan=lifespan,
+)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log validation errors clearly so they are visible in Docker logs."""
+    logger.error("Request validation failed: %s", exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
+
+# ─── Endpoints ──────────────────────────────────────────────────────────────
+
+
+@app.get("/health")
+async def health():
+    """Health-check endpoint for monitoring and Docker HEALTHCHECK."""
+    return {"status": "ok"}
+
+
+@app.post("/notify")
+async def notify(
+    request: NotificationRequest,
+    _api_key: str = Depends(verify_api_key),
+):
+    """Receive a local request and forward it as a proactive event to Alexa."""
+    # Check rate limit before doing any work
+    await rate_limiter.check()
+
+    token = await get_access_token()
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    # Build ISO 8601 timestamps
+    now = datetime.now(timezone.utc)
+    timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+    expiry_dt = now + timedelta(hours=1)
+    expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
+
+    reference_id = str(uuid.uuid4())
+
+    event_payload = {
+        "timestamp": timestamp,
+        "referenceId": reference_id,
+        "expiryTime": expiry,
+        "event": {
+            "name": "AMAZON.MessageAlert.Activated",
+            "payload": {
+                "state": {
+                    "status": "UNREAD",
+                    "freshness": "NEW",
+                },
+                "messageGroup": {
+                    "creator": {
+                        "name": request.creator_name,
+                    },
+                    "count": 1,
+                    "urgency": request.urgency,
+                },
+            },
+        },
+        "relevantAudience": {
+            "type": "Multicast",
+            "payload": {},
+        },
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                PROACTIVE_EVENTS_URL, headers=headers, json=event_payload
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "Alexa API rejected the request (%s): %s",
+                exc.response.status_code,
+                exc.response.text,
+            )
+            raise HTTPException(
+                status_code=exc.response.status_code,
+                detail=f"Alexa API error: {exc.response.text}",
+            )
+        except httpx.HTTPError as exc:
+            logger.error("Network error sending proactive event: %s", exc)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send proactive event: {exc}",
+            )
+
+    logger.info("Notification sent: %s", request.creator_name)
+    return {"status": "success", "message": "Notification sent successfully"}

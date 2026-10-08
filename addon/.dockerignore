@@ -1,0 +1,6 @@
+.dockerignore
+DOCS.md
+CHANGELOG.md
+README.md
+translations/
+*.md
