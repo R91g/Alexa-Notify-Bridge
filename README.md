@@ -201,10 +201,15 @@ curl -X POST http://<BRIDGE_IP>:8080/notify \
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (Max 256 characters) |
+| `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (if longer than 256 chars, automatically truncated to 253 + '...') |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
 | `expiry_hours` | `number` | ❌ | `24` | Hours until notification expires (clamped automatically between 5 min and 24h) |
+| `debounce_seconds` | `number` | ❌ | `0` (or config) | Window in seconds to ignore identical consecutive notifications |
 
+> **✂️ Automatic Truncation:** If a message exceeds Amazon's strict 256-character limit (e.g., when rendering long Home Assistant templates), the bridge automatically truncates it to 253 characters + `...`. The notification is never lost, and the response includes `"truncated": true`.
+>
+> **🛡️ Anti-Duplicate Debounce Filter:** If a bouncing sensor or automation fires multiple times sending the exact same text within the debounce window (configured globally via `DEBOUNCE_SECONDS` or per request), the bridge discards duplicates with `{"status": "ignored", "debounced": true}` to prevent spamming your speakers.
+>
 > **⏱️ Rate Limiting:** To prevent temporary bans from Amazon (e.g., if an automation loops), the bridge enforces a limit of **10 notifications per 10-second window**. Exceeding this limit will return an HTTP `429 Too Many Requests` error.
 
 ### 💡 The "Creator" Trick (Replicating Notify Me)
@@ -233,7 +238,7 @@ rest_command:
       Content-Type: "application/json"
       # x-api-key: "your_secret_api_key"  # Uncomment if you use API_KEY
     payload: >-
-      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}}
+      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}{% if debounce_seconds is defined and debounce_seconds not in ['', None, 'None'] %}, "debounce_seconds": {{ debounce_seconds | float }}{% endif %}}
 ```
 
 > **📌 Note on URL:** Replace `<SERVER_IP>` with the local IP of your server (e.g., `http://192.168.1.50:8080/notify`). If using the **Add-on**, use the local IP of your Home Assistant host (do not use `localhost` because Home Assistant Core and add-ons run in isolated Docker network namespaces). If using **standalone Docker**, use the IP of the machine running the container.

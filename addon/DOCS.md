@@ -30,6 +30,7 @@ After installing the add-on, go to the **Configuration** tab and fill in the fol
 | **Region** | ✅ | `EU` | Your Amazon region: `NA` (North America), `EU` (Europe), `FE` (Far East) |
 | **Log Level** | ✅ | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | **Default Notification Expiry** | ✅ | `24` | Hours until notifications expire (0.1–24). Can be overridden per request |
+| **Debounce Filter** | ❌ | `0` | Minimum seconds to ignore duplicate notifications (0 = disabled) |
 
 > **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify` must include the header `x-api-key: your_key`.
 
@@ -52,7 +53,7 @@ rest_command:
       Content-Type: "application/json"
       # x-api-key: "your_api_key"  # Uncomment if you set an API Key
     payload: >-
-      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}}
+      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}{% if debounce_seconds is defined and debounce_seconds not in ['', None, 'None'] %}, "debounce_seconds": {{ debounce_seconds | float }}{% endif %}}
 ```
 
 > **Note:** Replace `<YOUR_HOME_ASSISTANT_IP>` with the local IP address of your Home Assistant server (e.g., `http://192.168.1.50:8080/notify`). Do not use `localhost` because Home Assistant Core and add-ons run in separate Docker container network namespaces.

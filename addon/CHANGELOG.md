@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0
+
+- Automatic message truncation: messages exceeding Amazon's 256-character limit are automatically truncated to 253 characters + `...` with warning logs, ensuring notifications are never dropped.
+- In-memory anti-duplicate debounce filter: ignore identical consecutive notifications within a configurable time window (`debounce_seconds`, default: 0 / disabled) to prevent repeating alerts from bouncing sensors.
+- Fix validation error handling: strip non-serializable exception objects from Pydantic error contexts to ensure validation failures return HTTP 422 instead of 500.
+- Automated test suite: 20 unit tests with mocked Amazon APIs for fast and isolated verification.
+- CI/CD workflow: GitHub Actions pipeline running test suite and validating Docker builds for both standalone and add-on images on every push and PR.
+
 ## 1.1.1
 
 - Automatically clamp notification expiry between 5 minutes and 24 hours (Amazon's allowed limits) with clear warning logs when adjusted.

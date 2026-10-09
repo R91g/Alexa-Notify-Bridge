@@ -17,3 +17,6 @@ configuration:
   default_expiry_hours:
     name: "Default Notification Expiry (hours)"
     description: "How long notifications remain active before expiring (0.1–24 hours). Default: 24h. Can be overridden per request."
+  debounce_seconds:
+    name: "Debounce duplicates (seconds)"
+    description: "Minimum time window in seconds to ignore identical consecutive notifications and avoid repeated sounds (0 = disabled)."

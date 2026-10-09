@@ -201,10 +201,15 @@ curl -X POST http://<IP_DEL_BRIDGE>:8080/notify \
 
 | Campo | Tipo | Requerido | Por defecto | Descripción |
 |-------|------|-----------|-------------|-------------|
-| `creator_name` | `string` | ✅ | — | El texto que Alexa leerá en voz alta (Máx. 256 caracteres) |
+| `creator_name` | `string` | ✅ | — | El texto que Alexa leerá en voz alta (si supera 256 caracteres, se trunca automáticamente a 253 + '...') |
 | `urgency` | `string` | ❌ | `"URGENT"` | Debe ser `"URGENT"` |
 | `expiry_hours` | `number` | ❌ | `24` | Horas hasta que la notificación expira (acotado automáticamente entre 5 min y 24h) |
+| `debounce_seconds` | `number` | ❌ | `0` (o config) | Ventana en segundos para ignorar notificaciones idénticas consecutivas |
 
+> **✂️ Truncado automático:** Si el mensaje supera el límite estricto de 256 caracteres de Amazon (ej. al usar plantillas largas en Home Assistant), el puente lo recorta automáticamente a 253 caracteres + `...`. La notificación nunca se pierde y la respuesta incluye `"truncated": true`.
+>
+> **🛡️ Filtro anti-duplicados (Debounce):** Si un sensor con rebotes o una automatización manda el mismo mensaje exacto dentro de la ventana de tiempo (configurable globalmente con `DEBOUNCE_SECONDS` o por petición), el puente lo descarta respondiendo `{"status": "ignored", "debounced": true}` para no saturar al usuario con repeticiones.
+>
 > **⏱️ Rate Limiting:** Para evitar baneos temporales por parte de Amazon (ej. si una automatización entra en bucle), el puente implementa un límite de **10 notificaciones por cada ventana de 10 segundos**. Si superas este límite, recibirás un error HTTP `429 Too Many Requests`.
 
 ### 💡 El truco del "Creador" (Replicando Notify Me)
@@ -233,7 +238,7 @@ rest_command:
       Content-Type: "application/json"
       # x-api-key: "tu_api_key_secreta"  # Descomenta si usas API_KEY
     payload: >-
-      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}}
+      {"creator_name": {{ (message | default('')) | to_json }}{% if expiry_hours is defined and expiry_hours not in ['', None, 'None'] %}, "expiry_hours": {{ expiry_hours | float }}{% endif %}{% if debounce_seconds is defined and debounce_seconds not in ['', None, 'None'] %}, "debounce_seconds": {{ debounce_seconds | float }}{% endif %}}
 ```
 
 > **📌 Nota sobre la URL:** Reemplaza `<IP_DEL_SERVIDOR>` por la IP local de tu servidor (ej. `http://192.168.1.50:8080/notify`). Si usas el **Add-on**, pon la IP local de tu máquina de Home Assistant (no uses `localhost` porque Home Assistant Core y el Add-on se ejecutan en contenedores Docker aislados). Si usas **Docker independiente**, pon la IP de la máquina donde esté corriendo el contenedor.

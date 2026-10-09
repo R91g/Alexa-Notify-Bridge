@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Security, Depends, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
@@ -87,6 +88,68 @@ if DEFAULT_EXPIRY_HOURS != _raw_default_expiry:
         _adjusted_desc,
     )
 
+# ─── Debounce filter (anti-duplicate notifications) ──────────────────────────
+# Minimum time in seconds to prevent sending identical consecutive notifications.
+# 0 = disabled. Can be overridden per request via debounce_seconds.
+
+_raw_debounce = float(os.getenv("DEBOUNCE_SECONDS", "0"))
+DEBOUNCE_SECONDS = max(0.0, _raw_debounce)
+
+
+class DebounceFilter:
+    """In-memory cache preventing identical notifications from sounding repeatedly."""
+
+    def __init__(self, max_entries: int = 50):
+        self._history: dict[str, float] = {}
+        self._max_entries = max_entries
+        self._lock = asyncio.Lock()
+
+    async def is_duplicate(self, text: str, window_seconds: float) -> bool:
+        """Check if identical text was received within window_seconds. If not, record it."""
+        if window_seconds <= 0:
+            return False
+
+        async with self._lock:
+            now = time.time()
+            cutoff = now - max(window_seconds, 3600.0)
+            self._history = {k: ts for k, ts in self._history.items() if ts > cutoff}
+
+            last_time = self._history.get(text)
+            if last_time is not None and (now - last_time) < window_seconds:
+                return True
+
+            self._history[text] = now
+            return False
+
+
+debounce_filter = DebounceFilter()
+
+# ─── Message length limits ───────────────────────────────────────────────────
+# Amazon limits the MessageAlert creator.name field to 256 characters.
+
+MAX_MESSAGE_CHARS = 256
+TRUNCATE_CHARS = 253  # Leaves 3 chars for "..."
+
+
+def process_message_text(text: str) -> tuple[str, bool]:
+    """Strip whitespace and truncate message to 256 chars if it exceeds Amazon's limit.
+
+    Returns (processed_text, was_truncated).
+    """
+    clean = text.strip()
+    if len(clean) > MAX_MESSAGE_CHARS:
+        truncated = clean[:TRUNCATE_CHARS] + "..."
+        logger.warning(
+            "Notification message exceeded Amazon's %d char limit (%d chars). "
+            "Truncated automatically to: '%s'",
+            MAX_MESSAGE_CHARS,
+            len(clean),
+            truncated,
+        )
+        return truncated, True
+    return clean, False
+
+
 # ─── Request model ──────────────────────────────────────────────────────────
 
 
@@ -96,8 +159,9 @@ class NotificationRequest(BaseModel):
     creator_name: str = Field(
         ...,
         min_length=1,
-        max_length=256,
-        description="The text Alexa will read aloud (the 'creator' trick).",
+        max_length=4096,
+        description="The text that Alexa will read aloud (the 'creator' trick). "
+        "If longer than 256 chars, it is automatically truncated to 253 + '...'.",
     )
     urgency: Literal["URGENT"] = "URGENT"
     expiry_hours: float | None = Field(
@@ -105,6 +169,11 @@ class NotificationRequest(BaseModel):
         description="Hours until the notification expires (5 min to 24h). "
         "Values under 5 min are adjusted to 5 min; values over 24h are capped at 24h. "
         "If omitted, uses the DEFAULT_EXPIRY_HOURS setting (default: 24h).",
+    )
+    debounce_seconds: float | None = Field(
+        default=None,
+        ge=0,
+        description="Optional per-request debounce window in seconds. Overrides DEBOUNCE_SECONDS.",
     )
 
 
@@ -248,10 +317,14 @@ app = FastAPI(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Log validation errors clearly so they are visible in Docker logs."""
-    logger.error("Request validation failed: %s", exc.errors())
+    # Strip pydantic's 'ctx' which may contain non-serializable exception objects
+    errors = [
+        {k: v for k, v in err.items() if k != "ctx"} for err in exc.errors()
+    ]
+    logger.error("Request validation failed: %s", errors)
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()},
+        content={"detail": jsonable_encoder(errors)},
     )
 
 
@@ -285,6 +358,33 @@ async def notify(
     _api_key: str = Depends(verify_api_key),
 ):
     """Receive a local request and forward it as a proactive event to Alexa."""
+    raw_text = request.creator_name.strip()
+    if not raw_text:
+        raise HTTPException(
+            status_code=422,
+            detail="creator_name cannot be empty or whitespace only.",
+        )
+
+    message_text, is_truncated = process_message_text(raw_text)
+
+    # Check debounce filter before rate limiter
+    effective_debounce = (
+        request.debounce_seconds
+        if request.debounce_seconds is not None
+        else DEBOUNCE_SECONDS
+    )
+    if await debounce_filter.is_duplicate(message_text, effective_debounce):
+        logger.info(
+            "Debounced duplicate notification within %.1fs: '%s'",
+            effective_debounce,
+            message_text,
+        )
+        return {
+            "status": "ignored",
+            "debounced": True,
+            "message": "Duplicate notification ignored (debounced)",
+        }
+
     # Check rate limit before doing any work
     await rate_limiter.check()
 
@@ -329,7 +429,7 @@ async def notify(
                 },
                 "messageGroup": {
                     "creator": {
-                        "name": request.creator_name,
+                        "name": message_text,
                     },
                     "count": 1,
                     "urgency": request.urgency,
@@ -391,17 +491,23 @@ async def notify(
                 )
 
     # Store in history (most recent first)
-    notification_history.appendleft({
+    history_entry = {
         "timestamp": timestamp,
-        "message": request.creator_name,
+        "message": message_text,
         "expiry_hours": round(hours, 2),
         "reference_id": reference_id,
-    })
+    }
+    if is_truncated:
+        history_entry["truncated"] = True
+    notification_history.appendleft(history_entry)
 
-    logger.info("Notification sent: %s", request.creator_name)
-    return {
+    logger.info("Notification sent: %s", message_text)
+    response_data = {
         "status": "success",
         "message": "Notification sent successfully",
         "reference_id": reference_id,
         "expiry_hours": round(hours, 2),
     }
+    if is_truncated:
+        response_data["truncated"] = True
+    return response_data

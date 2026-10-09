@@ -31,6 +31,12 @@ export LOG_LEVEL="$(bashio::config 'log_level')"
 # Default notification expiry (hours)
 export DEFAULT_EXPIRY_HOURS="$(bashio::config 'default_expiry_hours')"
 
+# Anti-duplicate debounce filter (seconds)
+DEBOUNCE_VAL="$(bashio::config 'debounce_seconds')"
+if bashio::var.has_value "${DEBOUNCE_VAL}"; then
+    export DEBOUNCE_SECONDS="${DEBOUNCE_VAL}"
+fi
+
 # ─── Start the bridge ───────────────────────────────────────────────────────
 
 bashio::log.info "Starting Alexa Notify Bridge..."

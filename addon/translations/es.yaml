@@ -17,3 +17,6 @@ configuration:
   default_expiry_hours:
     name: "Expiración de notificaciones (horas)"
     description: "Tiempo que las notificaciones permanecen activas antes de expirar (0.1–24 horas). Por defecto: 24h. Se puede personalizar por petición."
+  debounce_seconds:
+    name: "Filtro anti-duplicados (segundos)"
+    description: "Ventana de tiempo mínima en segundos para ignorar notificaciones idénticas consecutivas y evitar repeticiones (0 = desactivado)."

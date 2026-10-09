@@ -1,5 +1,5 @@
 name: "Alexa Notify Bridge"
-version: "1.1.1"
+version: "1.2.0"
 slug: "alexa_notify_bridge"
 description: "Send custom proactive notifications to your Alexa devices via local HTTP requests"
 url: "https://github.com/R91g/Alexa-Notify-Bridge"
@@ -23,6 +23,7 @@ options:
   region: "EU"
   log_level: "INFO"
   default_expiry_hours: 24
+  debounce_seconds: 0
 
 # ─── Validation schema ──────────────────────────────────────────────────────
 schema:
@@ -32,3 +33,4 @@ schema:
   region: "match(^(NA|EU|FE)$)"
   log_level: "match(^(DEBUG|INFO|WARNING|ERROR)$)"
   default_expiry_hours: "float(0.08,24)"
+  debounce_seconds: "float(0,300)?"
