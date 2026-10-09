@@ -23,7 +23,7 @@ Es ideal para integrarlo con sistemas de domótica (Home Assistant, Node-RED, et
 ## 1. Requisitos Previos
 
 *   Una cuenta de [Amazon Developer](https://developer.amazon.com/alexa).
-*   [Node.js](https://nodejs.org/) (necesario solo para la instalación de `ask-cli`).
+*   [Node.js](https://nodejs.org/) (opcional, solo si eliges configurar la skill localmente sin Docker ni Codespaces).
 *   **Solo para instalación con Docker:** [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/).
 
 ---
@@ -37,35 +37,74 @@ Para que Alexa te envíe eventos proactivos, necesitas crear una Skill privada e
 2. Crea una nueva Skill. Elige un nombre (ej. "Notificaciones de Casa"), selecciona **Custom Model** (Modelo Personalizado) y crea la skill.
 3. Apunta el **Skill ID** de tu nueva Skill (lo encontrarás en la URL o en los ajustes generales).
 
-### Paso B: Instalar ASK CLI y dar permisos (Muy Importante)
-La API de Eventos Proactivos requiere permisos especiales que **solo se pueden configurar subiendo el archivo de manifiesto (`skill.json`) mediante la terminal oficial de Amazon (ASK CLI)**.
+### Paso B: Configurar permisos con ASK CLI (Muy Importante)
+La API de Eventos Proactivos requiere permisos especiales que **solo se pueden configurar subiendo el archivo de manifiesto (`skill.json`) mediante la herramienta oficial de Amazon (ASK CLI)**.
 
-1. Abre tu terminal y ejecuta el siguiente comando para instalar ASK CLI (requiere tener Node.js instalado):
+Elige **uno de los siguientes métodos** para aplicar el manifiesto (la **Opción 1** es la más recomendada si no quieres instalar nada en tu PC):
+
+#### Opción 1: En el navegador con GitHub Codespaces (Sin instalar nada — Ideal para Home Assistant)
+No necesitas tener Node.js ni Docker instalados en tu ordenador. Se hace 100% desde el navegador de forma gratuita:
+
+1. En este repositorio de GitHub, haz clic en el botón verde **`<> Code`** → pestaña **Codespaces** → **Create codespace on main**.
+2. Espera a que cargue el terminal en el navegador e instala ASK CLI:
    ```bash
    npm install -g ask-cli
    ```
-2. Vincula la terminal con tu cuenta de Amazon ejecutando:
+3. Inicia sesión con tu cuenta de Amazon:
+   ```bash
+   ask configure --no-browser
+   ```
+   *(Abre en una nueva pestaña el enlace que aparece en la consola, inicia sesión en Amazon y pega el código de autorización devuelto en la terminal).*
+4. Aplica el manifiesto a tu Skill:
+   ```bash
+   ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest "file:alexa-skill/skill.json"
+   ```
+   *(Sustituye `<TU_SKILL_ID>` por el Skill ID que apuntaste en el Paso A).*
+5. ¡Listo! Ya puedes cerrar la pestaña del navegador de Codespaces.
+
+---
+
+#### Opción 2: Con Docker en un solo comando (Para usuarios de Docker)
+Si ya tienes Docker instalado en tu servidor o equipo, puedes ejecutar un contenedor efímero sin instalar Node.js ni dependencias en tu sistema:
+
+> **Nota:** Ejecuta este comando desde la raíz del repositorio donde se encuentra la carpeta `alexa-skill`.
+
+- **En Linux / macOS:**
+  ```bash
+  docker run -it --rm -v "$(pwd)/alexa-skill:/skill" node:lts-alpine sh -c "npm install -g ask-cli && ask configure --no-browser && ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest file:/skill/skill.json"
+  ```
+- **En Windows (PowerShell):**
+  ```powershell
+  docker run -it --rm -v "${PWD}/alexa-skill:/skill" node:lts-alpine sh -c "npm install -g ask-cli && ask configure --no-browser && ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest file:/skill/skill.json"
+  ```
+*(Sustituye `<TU_SKILL_ID>` por tu Skill ID. Te pedirá abrir un enlace en tu navegador para autorizar la sesión).*
+
+---
+
+#### Opción 3: En local con Node.js
+Si prefieres usar la terminal de tu ordenador y tienes Node.js instalado:
+
+1. Instala ASK CLI:
+   ```bash
+   npm install -g ask-cli
+   ```
+2. Inicia sesión en Amazon:
    ```bash
    ask configure
    ```
-   *Esto abrirá tu navegador para que inicies sesión en tu cuenta de Amazon Developer.*
-3. En la terminal, sitúate en una carpeta temporal y descarga la estructura de tu nueva skill:
+3. Desde la carpeta del repositorio, sube el manifiesto:
    ```bash
-   ask init
+   ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest "file:alexa-skill/skill.json"
    ```
-   *(Sigue las instrucciones en pantalla, elige tu perfil y selecciona la skill que acabas de crear en el Paso A).*
-4. Ve a la carpeta descargada, entra en la subcarpeta `skill-package` y reemplaza el archivo `skill.json` que viene por defecto, por el archivo `skill.json` que se incluye en este repositorio (dentro de la carpeta `alexa-skill/`).
-   > **💡 Tip (Cambiar el nombre):** Por defecto, Alexa dirá *"Tienes una notificación nueva de **Casa**"*. Si quieres que diga otra cosa (ej. "HomeAssistant" o "Servidor"), simplemente abre el archivo `skill.json` y cambia el valor `"name": "Casa"` (o `"name": "Home"` para inglés) por el nombre que prefieras antes de subirlo.
-   >
-   > **⚠️ Nota de codificación:** Asegúrate de que tu editor guarde el archivo `skill.json` con formato **UTF-8**. Si se guarda en UTF-16 (común en algunos editores de Windows), ASK CLI dará error.
-   >
-   > **ℹ️ Sobre el endpoint URI:** El archivo `skill.json` contiene un ARN de Lambda (`ReflectorTemplateSkill`). Se trata de un **endpoint público genérico proporcionado por Amazon** que se usa como placeholder — no es un recurso personal. **No lo modifiques.** Las notificaciones proactivas no pasan por este endpoint; simplemente es un campo obligatorio del manifiesto de la skill.
-5. Sube los cambios para aplicar los permisos ejecutando:
-   ```bash
-   ask deploy --target skill-metadata
-   ```
+   *(Sustituye `<TU_SKILL_ID>` por tu Skill ID).*
 
-*(Alternativa rápida para usuarios avanzados: Si tienes tu Skill ID a mano, puedes saltarte el `ask init` y subir el archivo directamente ejecutando: `ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest "file:alexa-skill/skill.json"`).*
+---
+
+> **💡 Tip (Cambiar el nombre):** Por defecto, Alexa dirá *"Tienes una notificación nueva de **Casa**"* (o *"**Home**"* en inglés). Si quieres que diga otra cosa (ej. "HomeAssistant" o "Servidor"), abre el archivo `alexa-skill/skill.json` y cambia el valor `"name": "Casa"` (o el idioma que uses) por el nombre que prefieras antes de ejecutar el comando de subida.
+>
+> **⚠️ Nota de codificación:** Si editas el archivo `skill.json`, asegúrate de que tu editor lo guarde con formato **UTF-8**. Si se guarda en UTF-16 (común en algunos editores de Windows), ASK CLI dará error.
+>
+> **ℹ️ Sobre el endpoint URI:** El archivo `skill.json` contiene un ARN de Lambda (`ReflectorTemplateSkill`). Se trata de un **endpoint público genérico proporcionado por Amazon** que se usa como placeholder — no es un recurso personal. **No lo modifiques.** Las notificaciones proactivas no pasan por este endpoint; simplemente es un campo obligatorio del manifiesto de la skill.
 
 ### Paso C: Obtener Credenciales
 1. Vuelve a la [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) y entra en tu Skill.
