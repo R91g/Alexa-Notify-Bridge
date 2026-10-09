@@ -45,6 +45,8 @@ Choose **one of the following methods** to apply the manifest (Option 1 is recom
 #### Option 1: In your browser via GitHub Codespaces (No local installation needed — Recommended for Home Assistant users)
 You don't need Node.js or Docker installed on your computer. It runs 100% in your browser for free:
 
+> **ℹ️ Is Codespaces free?** Yes. Every personal GitHub account includes **60 free hours per month** of Codespaces. If you see a notice saying usage will be billed to your account (*"paid by user"*), don't worry: this setup takes less than 2 minutes and is completely covered by your free monthly quota.
+
 1. In this GitHub repository, click the green **`<> Code`** button → **Codespaces** tab → **Create codespace on main**.
 2. Wait for the browser terminal to load, then install ASK CLI:
    ```bash

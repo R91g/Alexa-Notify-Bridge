@@ -45,6 +45,8 @@ Elige **uno de los siguientes métodos** para aplicar el manifiesto (la **Opció
 #### Opción 1: En el navegador con GitHub Codespaces (Sin instalar nada — Ideal para Home Assistant)
 No necesitas tener Node.js ni Docker instalados en tu ordenador. Se hace 100% desde el navegador de forma gratuita:
 
+> **ℹ️ ¿Es gratis Codespaces?** Sí. Todas las cuentas personales de GitHub incluyen **60 horas gratis al mes** de Codespaces. Si te aparece un aviso indicando que el uso correrá a cuenta de tu usuario (*"paid by user"*), no te cobrarán nada: este proceso toma menos de 2 minutos y entra dentro de tu cuota gratuita mensual.
+
 1. En este repositorio de GitHub, haz clic en el botón verde **`<> Code`** → pestaña **Codespaces** → **Create codespace on main**.
 2. Espera a que cargue el terminal en el navegador e instala ASK CLI:
    ```bash
