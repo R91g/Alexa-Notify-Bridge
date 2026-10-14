@@ -282,13 +282,24 @@ data:
            max: 24
            step: 0.5
            unit_of_measurement: h
+     debounce_seconds:
+       name: Segundos de debounce
+       description: "Segundos para ignorar mensajes idénticos consecutivos (opcional)"
+       required: false
+       selector:
+         number:
+           min: 0
+           max: 300
+           step: 5
+           unit_of_measurement: s
    sequence:
      - action: rest_command.alexa_notify
        data:
          message: "{{ message }}"
          expiry_hours: "{{ expiry_hours | default(none) }}"
+         debounce_seconds: "{{ debounce_seconds | default(none) }}"
    ```
-   *Ahora podrás seleccionar la acción "Notificar por Alexa" en tus automatizaciones y tendrás un cuadro de texto para el mensaje y un selector opcional para la expiración.*
+   *Ahora podrás seleccionar la acción "Notificar por Alexa" en tus automatizaciones y tendrás un cuadro de texto para el mensaje y selectores opcionales para la expiración y el filtro anti-duplicados.*
 
 ---
 

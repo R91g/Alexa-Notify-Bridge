@@ -23,7 +23,7 @@ load_dotenv()
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOG_LEVEL = (os.getenv("LOG_LEVEL") or "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -63,9 +63,9 @@ async def verify_api_key(key: str = Security(api_key_header_scheme)):
 
 TOKEN_URL = "https://api.amazon.com/auth/o2/token"
 
-PROACTIVE_EVENTS_URL = os.getenv(
-    "PROACTIVE_EVENTS_URL",
-    "https://api.eu.amazonalexa.com/v1/proactiveEvents/stages/development",
+PROACTIVE_EVENTS_URL = (
+    os.getenv("PROACTIVE_EVENTS_URL")
+    or "https://api.eu.amazonalexa.com/v1/proactiveEvents/stages/development"
 )
 
 # Amazon Proactive Events requires expiry to be between 5 minutes and 24 hours.
@@ -78,7 +78,7 @@ def clamp_expiry_hours(hours: float) -> float:
     return max(MIN_EXPIRY_HOURS, min(MAX_EXPIRY_HOURS, hours))
 
 
-_raw_default_expiry = float(os.getenv("DEFAULT_EXPIRY_HOURS", "24"))
+_raw_default_expiry = float(os.getenv("DEFAULT_EXPIRY_HOURS") or "24")
 DEFAULT_EXPIRY_HOURS = clamp_expiry_hours(_raw_default_expiry)
 if DEFAULT_EXPIRY_HOURS != _raw_default_expiry:
     _adjusted_desc = "5 minutes (minimum)" if DEFAULT_EXPIRY_HOURS == MIN_EXPIRY_HOURS else "24 hours (maximum)"
@@ -92,7 +92,7 @@ if DEFAULT_EXPIRY_HOURS != _raw_default_expiry:
 # Minimum time in seconds to prevent sending identical consecutive notifications.
 # 0 = disabled. Can be overridden per request via debounce_seconds.
 
-_raw_debounce = float(os.getenv("DEBOUNCE_SECONDS", "0"))
+_raw_debounce = float(os.getenv("DEBOUNCE_SECONDS") or "0")
 DEBOUNCE_SECONDS = max(0.0, _raw_debounce)
 
 
@@ -118,8 +118,17 @@ class DebounceFilter:
             if last_time is not None and (now - last_time) < window_seconds:
                 return True
 
+            if self._max_entries > 0 and len(self._history) >= self._max_entries and text not in self._history:
+                oldest_key = min(self._history, key=self._history.get)
+                del self._history[oldest_key]
+
             self._history[text] = now
             return False
+
+    async def remove(self, text: str) -> None:
+        """Remove a recorded message from the debounce cache (e.g., if delivery failed)."""
+        async with self._lock:
+            self._history.pop(text, None)
 
 
 debounce_filter = DebounceFilter()
@@ -166,6 +175,7 @@ class NotificationRequest(BaseModel):
     urgency: Literal["URGENT"] = "URGENT"
     expiry_hours: float | None = Field(
         default=None,
+        allow_inf_nan=False,
         description="Hours until the notification expires (5 min to 24h). "
         "Values under 5 min are adjusted to 5 min; values over 24h are capped at 24h. "
         "If omitted, uses the DEFAULT_EXPIRY_HOURS setting (default: 24h).",
@@ -173,6 +183,7 @@ class NotificationRequest(BaseModel):
     debounce_seconds: float | None = Field(
         default=None,
         ge=0,
+        allow_inf_nan=False,
         description="Optional per-request debounce window in seconds. Overrides DEBOUNCE_SECONDS.",
     )
 
@@ -190,6 +201,7 @@ class TokenCache:
     def __init__(self):
         self.token: str | None = None
         self.expires_at: float = 0
+        self._lock = asyncio.Lock()
 
 
 token_cache = TokenCache()
@@ -197,42 +209,43 @@ token_cache = TokenCache()
 
 async def get_access_token(force_refresh: bool = False) -> str:
     """Obtain a valid Amazon LWA access token, using the cache when possible."""
-    now = time.time()
+    async with token_cache._lock:
+        now = time.time()
 
-    if not force_refresh and token_cache.token and token_cache.expires_at > now:
-        return token_cache.token
+        if not force_refresh and token_cache.token and token_cache.expires_at > now:
+            return token_cache.token
 
-    if not ALEXA_CLIENT_ID or not ALEXA_CLIENT_SECRET:
-        logger.error("ALEXA_CLIENT_ID or ALEXA_CLIENT_SECRET not configured.")
-        raise HTTPException(
-            status_code=500,
-            detail="Alexa client credentials not configured. Set them in .env.",
-        )
-
-    async with httpx.AsyncClient() as client:
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": ALEXA_CLIENT_ID,
-            "client_secret": ALEXA_CLIENT_SECRET,
-            "scope": "alexa::proactive_events",
-        }
-        try:
-            response = await client.post(TOKEN_URL, data=data)
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            logger.error("Failed to obtain Amazon access token: %s", exc)
+        if not ALEXA_CLIENT_ID or not ALEXA_CLIENT_SECRET:
+            logger.error("ALEXA_CLIENT_ID or ALEXA_CLIENT_SECRET not configured.")
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to get access token: {exc}",
+                detail="Alexa client credentials not configured. Set them in .env.",
             )
 
-        token_data = response.json()
-        token_cache.token = token_data["access_token"]
-        # Subtract 60 s as a safety margin for network delays
-        token_cache.expires_at = now + token_data.get("expires_in", 3600) - 60
+        async with httpx.AsyncClient() as client:
+            data = {
+                "grant_type": "client_credentials",
+                "client_id": ALEXA_CLIENT_ID,
+                "client_secret": ALEXA_CLIENT_SECRET,
+                "scope": "alexa::proactive_events",
+            }
+            try:
+                response = await client.post(TOKEN_URL, data=data)
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                logger.error("Failed to obtain Amazon access token: %s", exc)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to get access token: {exc}",
+                )
 
-        logger.info("Amazon access token refreshed successfully.")
-        return token_cache.token
+            token_data = response.json()
+            token_cache.token = token_data["access_token"]
+            # Subtract 60 s as a safety margin for network delays
+            token_cache.expires_at = time.time() + token_data.get("expires_in", 3600) - 60
+
+            logger.info("Amazon access token refreshed successfully.")
+            return token_cache.token
 
 
 # ─── Rate limiter ───────────────────────────────────────────────────────────
@@ -385,110 +398,115 @@ async def notify(
             "message": "Duplicate notification ignored (debounced)",
         }
 
-    # Check rate limit before doing any work
-    await rate_limiter.check()
+    try:
+        # Check rate limit before doing any work
+        await rate_limiter.check()
 
-    token = await get_access_token()
+        token = await get_access_token()
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
-    # Build ISO 8601 timestamps
-    now = datetime.now(timezone.utc)
-    timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
-    raw_hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
-    hours = clamp_expiry_hours(raw_hours)
-    if request.expiry_hours is not None and hours != raw_hours:
-        adjusted_desc = (
-            "5 minutes (minimum allowed)"
-            if hours == MIN_EXPIRY_HOURS
-            else "24 hours (maximum allowed)"
-        )
-        logger.warning(
-            "Notification expiry of %s hours is outside Amazon's limits (5 min to 24h). Adjusted to %s.",
-            raw_hours,
-            adjusted_desc,
-        )
-    expiry_dt = now + timedelta(hours=hours)
-    expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
+        # Build ISO 8601 timestamps
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+        raw_hours = request.expiry_hours if request.expiry_hours is not None else DEFAULT_EXPIRY_HOURS
+        hours = clamp_expiry_hours(raw_hours)
+        if request.expiry_hours is not None and hours != raw_hours:
+            adjusted_desc = (
+                "5 minutes (minimum allowed)"
+                if hours == MIN_EXPIRY_HOURS
+                else "24 hours (maximum allowed)"
+            )
+            logger.warning(
+                "Notification expiry of %s hours is outside Amazon's limits (5 min to 24h). Adjusted to %s.",
+                raw_hours,
+                adjusted_desc,
+            )
+        expiry_dt = now + timedelta(hours=hours)
+        expiry = expiry_dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{expiry_dt.microsecond // 1000:03d}Z"
 
-    reference_id = str(uuid.uuid4())
+        reference_id = str(uuid.uuid4())
 
-    event_payload = {
-        "timestamp": timestamp,
-        "referenceId": reference_id,
-        "expiryTime": expiry,
-        "event": {
-            "name": "AMAZON.MessageAlert.Activated",
-            "payload": {
-                "state": {
-                    "status": "UNREAD",
-                    "freshness": "NEW",
-                },
-                "messageGroup": {
-                    "creator": {
-                        "name": message_text,
+        event_payload = {
+            "timestamp": timestamp,
+            "referenceId": reference_id,
+            "expiryTime": expiry,
+            "event": {
+                "name": "AMAZON.MessageAlert.Activated",
+                "payload": {
+                    "state": {
+                        "status": "UNREAD",
+                        "freshness": "NEW",
                     },
-                    "count": 1,
-                    "urgency": request.urgency,
+                    "messageGroup": {
+                        "creator": {
+                            "name": message_text,
+                        },
+                        "count": 1,
+                        "urgency": request.urgency,
+                    },
                 },
             },
-        },
-        "relevantAudience": {
-            "type": "Multicast",
-            "payload": {},
-        },
-    }
+            "relevantAudience": {
+                "type": "Multicast",
+                "payload": {},
+            },
+        }
 
-    async with httpx.AsyncClient() as client:
-        for attempt in range(1 + MAX_RETRIES):
-            try:
-                response = await client.post(
-                    PROACTIVE_EVENTS_URL, headers=headers, json=event_payload
-                )
-                response.raise_for_status()
-                break  # Success — exit retry loop
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 401 and attempt < MAX_RETRIES:
-                    logger.warning(
-                        "Amazon access token rejected (401), refreshing token and retrying..."
+        async with httpx.AsyncClient() as client:
+            for attempt in range(1 + MAX_RETRIES):
+                try:
+                    response = await client.post(
+                        PROACTIVE_EVENTS_URL, headers=headers, json=event_payload
                     )
-                    token = await get_access_token(force_refresh=True)
-                    headers["Authorization"] = f"Bearer {token}"
-                    continue
-                if exc.response.status_code >= 500 and attempt < MAX_RETRIES:
-                    logger.warning(
-                        "Amazon API error (%s), retrying in %.0fs...",
+                    response.raise_for_status()
+                    break  # Success — exit retry loop
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 401 and attempt < MAX_RETRIES:
+                        logger.warning(
+                            "Amazon access token rejected (401), refreshing token and retrying..."
+                        )
+                        token = await get_access_token(force_refresh=True)
+                        headers["Authorization"] = f"Bearer {token}"
+                        continue
+                    if exc.response.status_code >= 500 and attempt < MAX_RETRIES:
+                        logger.warning(
+                            "Amazon API error (%s), retrying in %.0fs...",
+                            exc.response.status_code,
+                            RETRY_DELAY_S,
+                        )
+                        await asyncio.sleep(RETRY_DELAY_S)
+                        continue
+                    logger.error(
+                        "Alexa API rejected the request (%s): %s",
                         exc.response.status_code,
-                        RETRY_DELAY_S,
+                        exc.response.text,
                     )
-                    await asyncio.sleep(RETRY_DELAY_S)
-                    continue
-                logger.error(
-                    "Alexa API rejected the request (%s): %s",
-                    exc.response.status_code,
-                    exc.response.text,
-                )
-                raise HTTPException(
-                    status_code=exc.response.status_code,
-                    detail=f"Alexa API error: {exc.response.text}",
-                )
-            except httpx.HTTPError as exc:
-                if attempt < MAX_RETRIES:
-                    logger.warning(
-                        "Network error, retrying in %.0fs: %s",
-                        RETRY_DELAY_S,
-                        exc,
+                    raise HTTPException(
+                        status_code=exc.response.status_code,
+                        detail=f"Alexa API error: {exc.response.text}",
                     )
-                    await asyncio.sleep(RETRY_DELAY_S)
-                    continue
-                logger.error("Network error sending proactive event: %s", exc)
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to send proactive event: {exc}",
-                )
+                except httpx.HTTPError as exc:
+                    if attempt < MAX_RETRIES:
+                        logger.warning(
+                            "Network error, retrying in %.0fs: %s",
+                            RETRY_DELAY_S,
+                            exc,
+                        )
+                        await asyncio.sleep(RETRY_DELAY_S)
+                        continue
+                    logger.error("Network error sending proactive event: %s", exc)
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to send proactive event: {exc}",
+                    )
+    except Exception:
+        if effective_debounce > 0:
+            await debounce_filter.remove(message_text)
+        raise
 
     # Store in history (most recent first)
     history_entry = {

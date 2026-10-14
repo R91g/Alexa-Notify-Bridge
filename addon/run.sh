@@ -2,13 +2,17 @@
 
 # ─── Read configuration from Home Assistant ─────────────────────────────────
 
-export ALEXA_CLIENT_ID="$(bashio::config 'alexa_client_id')"
-export ALEXA_CLIENT_SECRET="$(bashio::config 'alexa_client_secret')"
+if bashio::config.has_value 'alexa_client_id'; then
+    export ALEXA_CLIENT_ID="$(bashio::config 'alexa_client_id')"
+fi
+
+if bashio::config.has_value 'alexa_client_secret'; then
+    export ALEXA_CLIENT_SECRET="$(bashio::config 'alexa_client_secret')"
+fi
 
 # API Key (optional — only export if the user has set a value)
-API_KEY_VALUE="$(bashio::config 'api_key')"
-if bashio::var.has_value "${API_KEY_VALUE}"; then
-    export API_KEY="${API_KEY_VALUE}"
+if bashio::config.has_value 'api_key'; then
+    export API_KEY="$(bashio::config 'api_key')"
 fi
 
 # Region → Proactive Events URL mapping
@@ -32,9 +36,8 @@ export LOG_LEVEL="$(bashio::config 'log_level')"
 export DEFAULT_EXPIRY_HOURS="$(bashio::config 'default_expiry_hours')"
 
 # Anti-duplicate debounce filter (seconds)
-DEBOUNCE_VAL="$(bashio::config 'debounce_seconds')"
-if bashio::var.has_value "${DEBOUNCE_VAL}"; then
-    export DEBOUNCE_SECONDS="${DEBOUNCE_VAL}"
+if bashio::config.has_value 'debounce_seconds'; then
+    export DEBOUNCE_SECONDS="$(bashio::config 'debounce_seconds')"
 fi
 
 # ─── Start the bridge ───────────────────────────────────────────────────────

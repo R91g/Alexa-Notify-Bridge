@@ -18,7 +18,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 _RealAsyncClient = httpx.AsyncClient
 
@@ -79,6 +80,7 @@ def make_test_client(monkeypatch, env_overrides: dict | None = None) -> tuple[Te
         "API_KEY",
         "PROACTIVE_EVENTS_URL",
         "DEFAULT_EXPIRY_HOURS",
+        "DEBOUNCE_SECONDS",
         "LOG_LEVEL",
     ):
         monkeypatch.delenv(key, raising=False)
@@ -246,6 +248,17 @@ def test_invalid_json_body_returns_422(monkeypatch):
     assert response.status_code == 422
 
 
+def test_empty_env_vars_fallback_cleanly(monkeypatch):
+    """Empty strings in optional numeric env vars fall back to defaults without ValueError."""
+    client, _ = make_test_client(
+        monkeypatch,
+        {"DEFAULT_EXPIRY_HOURS": "", "DEBOUNCE_SECONDS": "", "LOG_LEVEL": ""},
+    )
+    response = client.post("/notify", json={"creator_name": "Env fallback test"})
+    assert response.status_code == 200
+    assert response.json()["expiry_hours"] == 24.0
+
+
 # ─── Debounce Filter (Anti-Duplicates) ───────────────────────────────────────
 
 
@@ -290,16 +303,37 @@ def test_debounce_per_request_override(monkeypatch):
     assert len(fake.requests_to("proactiveEvents")) == 1
 
 
+def test_debounce_rollback_on_delivery_failure(monkeypatch):
+    """If delivery to Amazon fails, the message is removed from debounce cache so retries succeed."""
+    client, fake = make_test_client(monkeypatch, {"DEBOUNCE_SECONDS": "60"})
+    fake.proactive_responses = [500, 500, 202]
+
+    async def _dummy_sleep():
+        return
+
+    monkeypatch.setattr("asyncio.sleep", lambda s: _dummy_sleep())
+
+    # 1st attempt fails after retry (both 500s consumed)
+    r1 = client.post("/notify", json={"creator_name": "Fallo temporal"})
+    assert r1.status_code == 500
+
+    # Immediate retry with identical text must NOT be debounced
+    r2 = client.post("/notify", json={"creator_name": "Fallo temporal"})
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "success"
+
+
 # ─── API Key Authentication ─────────────────────────────────────────────────
 
 
 def test_api_key_required_when_configured(monkeypatch):
-    """When API_KEY is set, requests without valid x-api-key header return 403."""
+    """When API_KEY is set, requests without valid x-api-key header return 403 on /notify and /history."""
     client, _ = make_test_client(monkeypatch, {"API_KEY": "secret-token-123"})
 
     # No key provided
     r1 = client.post("/notify", json={"creator_name": "Hello"})
     assert r1.status_code == 403
+    assert client.get("/history").status_code == 403
 
     # Wrong key provided
     r2 = client.post(
@@ -316,6 +350,7 @@ def test_api_key_required_when_configured(monkeypatch):
         headers={"x-api-key": "secret-token-123"},
     )
     assert r3.status_code == 200
+    assert client.get("/history", headers={"x-api-key": "secret-token-123"}).status_code == 200
 
 
 def test_api_key_not_required_when_not_configured(monkeypatch):
@@ -432,4 +467,3 @@ async def test_validation_exception_handler_handles_non_serializable_ctx():
     assert "detail" in body
     assert "ctx" not in body["detail"][0]
     assert body["detail"][0]["msg"] == "Value error message"
-

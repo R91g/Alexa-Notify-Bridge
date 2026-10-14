@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.1
+
+- Rollback debounce cache on delivery failure: if Amazon API or network fails, the message is unblocked so subsequent retries succeed immediately.
+- Prevent startup crash (`ValueError`) when optional numeric environment variables are left empty in `.env` (`DEFAULT_EXPIRY_HOURS=""`, `DEBOUNCE_SECONDS=""`).
+- Concurrency protection: thread-safe `asyncio.Lock` in `TokenCache` to prevent duplicate OAuth2 token requests during concurrent notifications.
+- Validation hardening: reject `NaN` and `Infinity` values in Pydantic models (`allow_inf_nan=False`).
+- Memory bound in `DebounceFilter`: enforce `_max_entries` limit by pruning oldest entry when the cache is full.
+- Home Assistant Watchdog: enable native HA supervisor watchdog monitoring on `/health` endpoint.
+- Add-on schema alignment: adjust minimum `default_expiry_hours` to 0.1 (6 min) to prevent out-of-bounds warnings on startup.
+- Robust Bashio parsing: use `bashio::config.has_value` in `run.sh` to prevent empty fields exporting literal `"null"` strings.
+- Pure Python Uvicorn: switch to `uvicorn` (without `[standard]` C-extensions) to ensure reliable multi-arch builds on Alpine Linux (armv7/armhf).
+- CI/CD synchronization check: automated CI check ensuring standalone and add-on files remain strictly identical.
+
 ## 1.2.0
 
 - Automatic message truncation: messages exceeding Amazon's 256-character limit are automatically truncated to 253 characters + `...` with warning logs, ensuring notifications are never dropped.

@@ -282,13 +282,24 @@ data:
            max: 24
            step: 0.5
            unit_of_measurement: h
+     debounce_seconds:
+       name: Debounce Seconds
+       description: "Seconds to ignore duplicate consecutive messages (optional)"
+       required: false
+       selector:
+         number:
+           min: 0
+           max: 300
+           step: 5
+           unit_of_measurement: s
    sequence:
      - action: rest_command.alexa_notify
        data:
          message: "{{ message }}"
          expiry_hours: "{{ expiry_hours | default(none) }}"
+         debounce_seconds: "{{ debounce_seconds | default(none) }}"
    ```
-   *Now you can select the "Notify via Alexa" action in your automations and get a text box for the message plus an optional expiry selector!*
+   *Now you can select the "Notify via Alexa" action in your automations and get a text box for the message plus optional expiry and debounce selectors!*
 
 ---
 

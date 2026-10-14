@@ -26,13 +26,13 @@ After installing the add-on, go to the **Configuration** tab and fill in the fol
 |--------|----------|---------|-------------|
 | **Alexa Client ID** | ✅ | — | Your Alexa Skill's Client ID |
 | **Alexa Client Secret** | ✅ | — | Your Alexa Skill's Client Secret |
-| **API Key** | ❌ | *(empty)* | Optional password to protect the `/notify` endpoint |
+| **API Key** | ❌ | *(empty)* | Optional password to protect the `/notify` and `/history` endpoints |
 | **Region** | ✅ | `EU` | Your Amazon region: `NA` (North America), `EU` (Europe), `FE` (Far East) |
 | **Log Level** | ✅ | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | **Default Notification Expiry** | ✅ | `24` | Hours until notifications expire (0.1–24). Can be overridden per request |
 | **Debounce Filter** | ❌ | `0` | Minimum seconds to ignore duplicate notifications (0 = disabled) |
 
-> **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify` must include the header `x-api-key: your_key`.
+> **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify` and `/history` must include the header `x-api-key: your_key`.
 
 ---
 
@@ -97,11 +97,22 @@ fields:
         max: 24
         step: 0.5
         unit_of_measurement: h
+  debounce_seconds:
+    name: Debounce Seconds
+    description: "Seconds to ignore duplicate consecutive messages (optional)"
+    required: false
+    selector:
+      number:
+        min: 0
+        max: 300
+        step: 5
+        unit_of_measurement: s
 sequence:
   - action: rest_command.alexa_notify
     data:
       message: "{{ message }}"
       expiry_hours: "{{ expiry_hours | default(none) }}"
+      debounce_seconds: "{{ debounce_seconds | default(none) }}"
 ```
 
 ---
@@ -118,9 +129,14 @@ sequence:
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (max 256 characters) |
+| `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (if longer than 256 chars, automatically truncated to 253 + '...') |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
 | `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (clamped automatically between 5 min and 24h) |
+| `debounce_seconds` | `number` | ❌ | `0` (or config) | Window in seconds to ignore identical consecutive notifications |
+
+> **✂️ Automatic Truncation:** If a message exceeds Amazon's strict 256-character limit (e.g., when rendering long Home Assistant templates), the bridge automatically truncates it to 253 characters + `...`. The notification is never lost, and the response includes `"truncated": true`.
+>
+> **🛡️ Anti-Duplicate Debounce Filter:** If a bouncing sensor or automation fires multiple times sending the exact same text within the debounce window, the bridge discards duplicates with `{"status": "ignored", "debounced": true}` to prevent spamming your speakers.
 
 ---
 
@@ -146,7 +162,7 @@ To prevent temporary bans from Amazon, the bridge limits requests to **10 notifi
 
 ## Automatic Retries
 
-If Amazon's API returns a server error (5xx) or a network error occurs, the bridge will **automatically retry once** after a 2-second delay before reporting a failure.
+If Amazon's API returns a server error (5xx) or a network error occurs, the bridge will **automatically retry once** after a 2-second delay (or refresh the token on a 401 error) before reporting a failure.
 
 ---
 

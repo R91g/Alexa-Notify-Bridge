@@ -14,10 +14,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify standalone and add-on files are in sync
+        run: |
+          cmp -s main.py addon/main.py || (echo "Error: main.py and addon/main.py differ!" && exit 1)
+          cmp -s requirements.txt addon/requirements.txt || (echo "Error: requirements.txt and addon/requirements.txt differ!" && exit 1)
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
