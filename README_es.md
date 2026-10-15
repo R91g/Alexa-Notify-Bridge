@@ -3,6 +3,7 @@
 [🇪🇸 Español](README_es.md) | [🇬🇧 English](README.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Añadir repositorio a Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge)
 
 > **Aclaración importante:** Este proyecto ha sido creado por una persona sin grandes conocimientos de programación gracias a la ayuda de una Inteligencia Artificial mediante *"vibe coding"* (programación conversacional). Su estructura está enfocada en ser funcional y fácil de entender. Por tanto, es posible que contenga algunos errores y posibles mejoras. Si encuentras alguno, por favor, házmelo saber.
 
@@ -129,7 +130,11 @@ Elige el método que mejor se adapte a tu entorno:
 
 ### Opción A: Add-on de Home Assistant (Recomendado)
 
-La forma más sencilla si ya usas Home Assistant.
+La forma más sencilla si ya usas Home Assistant:
+
+[![Añadir repositorio a Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge)
+
+*(O si prefieres añadirlo manualmente)*:
 
 1. En Home Assistant, ve a **Ajustes > Complementos > Tienda de complementos**.
 2. Haz clic en los tres puntos (⋮) de la esquina superior derecha y selecciona **Repositorios**.
