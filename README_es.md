@@ -3,7 +3,7 @@
 [🇪🇸 Español](README_es.md) | [🇬🇧 English](README.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Añadir repositorio a Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge)
+<a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge" title="Añadir a Home Assistant"><img src="https://brands.home-assistant.io/_/homeassistant/icon.png" height="20" alt="Home Assistant" style="vertical-align: middle;"></a>
 
 > **Aclaración importante:** Este proyecto ha sido creado por una persona sin grandes conocimientos de programación gracias a la ayuda de una Inteligencia Artificial mediante *"vibe coding"* (programación conversacional). Su estructura está enfocada en ser funcional y fácil de entender. Por tanto, es posible que contenga algunos errores y posibles mejoras. Si encuentras alguno, por favor, házmelo saber.
 

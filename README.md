@@ -3,7 +3,7 @@
 [🇪🇸 Español](README_es.md) | [🇬🇧 English](README.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge)
+<a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge" title="Add to Home Assistant"><img src="https://brands.home-assistant.io/_/homeassistant/icon.png" height="20" alt="Home Assistant" style="vertical-align: middle;"></a>
 
 > **Important Disclaimer:** This project was created by someone without extensive programming knowledge with the help of an Artificial Intelligence through *"vibe coding"* (conversational programming). Its structure is focused on being functional and easy to understand. Therefore, it may contain some bugs and potential improvements. If you find any, please let me know.
 
