@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+- Fix AppArmor profile syntax conflict (`ix` vs `cx` transition) that prevented Home Assistant Supervisor from loading the profile during update.
+- Migrate add-on base image directly into `addon/Dockerfile` using multi-arch `ghcr.io/home-assistant/base-python:3.13-alpine3.22` and remove deprecated `addon/build.yaml`.
+- Remove deprecated `armv7` architecture from `addon/config.yaml` (keeping `amd64` and `aarch64`).
+
 ## 1.3.0
 
 - **New `GET /status` endpoint:** Returns bridge diagnostics (region, credentials configured, token validity & remaining TTL, effective expiry/debounce settings, history count, and uptime), protected by `API_KEY` when configured.
