@@ -5,8 +5,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 <a href="https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FR91g%2FAlexa-Notify-Bridge" title="Añadir a Home Assistant"><img src="https://brands.home-assistant.io/_/homeassistant/icon.png" height="20" alt="Home Assistant" style="vertical-align: middle;"></a>
 
-> **Aclaración importante:** Este proyecto ha sido creado por una persona sin grandes conocimientos de programación gracias a la ayuda de una Inteligencia Artificial mediante *"vibe coding"* (programación conversacional). Su estructura está enfocada en ser funcional y fácil de entender. Por tanto, es posible que contenga algunos errores y posibles mejoras. Si encuentras alguno, por favor, házmelo saber.
-
 Este proyecto es un puente (*bridge*) ligero construido en Python (FastAPI) y empaquetado en Docker. Su objetivo es permitirte enviar notificaciones proactivas personalizadas a tus dispositivos Amazon Echo (Alexa) mediante peticiones HTTP locales.
 
 Es ideal para integrarlo con sistemas de domótica (Home Assistant, Node-RED, etc.), replicando el funcionamiento de Skills populares como *Notify Me*. Con esto, Alexa encenderá el anillo amarillo y te leerá las notificaciones cuando le preguntes: *"Alexa, ¿qué notificaciones tengo?"*.
@@ -27,100 +25,85 @@ Es ideal para integrarlo con sistemas de domótica (Home Assistant, Node-RED, et
 *   [Node.js](https://nodejs.org/) (opcional, solo si eliges configurar la skill localmente sin Docker ni Codespaces).
 *   **Solo para instalación con Docker:** [Docker](https://docs.docker.com/get-docker/) y [Docker Compose](https://docs.docker.com/compose/install/).
 
+> **⚠️ Compatibilidad con Alexa+ (Acceso anticipado):** En dispositivos inscritos en el programa de acceso anticipado de **Alexa+**, existe una limitación por parte de Amazon por la que las notificaciones proactivas llegan correctamente a la cuenta (Alexa las lee si le preguntas *"¿qué notificaciones tengo?"*), pero **no se enciende el anillo amarillo** ni suena el aviso en los altavoces Echo. Es un comportamiento propio de Alexa+ que no puede controlarse desde la API. Si necesitas el anillo amarillo, la única solución actual es salir del acceso anticipado y volver a Alexa clásica.
+
 ---
 
 ## 2. Creación y Configuración de la Skill en Amazon
 
-Para que Alexa te envíe eventos proactivos, necesitas crear una Skill privada en tu cuenta.
+Para que Alexa te envíe eventos proactivos, necesitas crear una Skill privada en tu cuenta de [Amazon Developer](https://developer.amazon.com/alexa/console/ask) con permisos especiales de notificaciones.
 
-### Paso A: Crear la Skill
-1. Entra en [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask).
-2. Crea una nueva Skill. Elige un nombre (ej. "Notificaciones de Casa"), selecciona **Custom Model** (Modelo Personalizado) y crea la skill.
-3. Apunta el **Skill ID** de tu nueva Skill (lo encontrarás en la URL o en los ajustes generales).
+El repositorio incluye un **asistente automático (`setup-skill.sh`)** que se encarga de todo por ti: crea la skill, aplica los permisos proactivos, te permite elegir el nombre (por defecto *"Casa"*) y te muestra directamente en pantalla tu **Alexa Client ID** y **Alexa Client Secret**.
 
-### Paso B: Configurar permisos con ASK CLI (Muy Importante)
-La API de Eventos Proactivos requiere permisos especiales que **solo se pueden configurar subiendo el archivo de manifiesto (`skill.json`) mediante la herramienta oficial de Amazon (ASK CLI)**.
+### Paso A: Ejecutar el asistente automático
 
-Elige **uno de los siguientes métodos** para aplicar el manifiesto (la **Opción 1** es la más recomendada si no quieres instalar nada en tu PC):
+Elige **uno de los siguientes métodos** (la **Opción 1** es la más sencilla: no requiere instalar nada en tu PC):
 
-#### Opción 1: En el navegador con GitHub Codespaces (Sin instalar nada — Ideal para Home Assistant)
-No necesitas tener Node.js ni Docker instalados en tu ordenador. Se hace 100% desde el navegador de forma gratuita:
+#### Opción 1: En el navegador con GitHub Codespaces (Recomendado — Sin instalar nada)
+[![Abrir en GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/R91g/Alexa-Notify-Bridge)
 
-> **ℹ️ ¿Es gratis Codespaces?** Sí. Todas las cuentas personales de GitHub incluyen **60 horas gratis al mes** de Codespaces. Si te aparece un aviso indicando que el uso correrá a cuenta de tu usuario (*"paid by user"*), no te cobrarán nada: este proceso toma menos de 2 minutos y entra dentro de tu cuota gratuita mensual.
+> **ℹ️ ¿Es gratis Codespaces?** Sí. Todas las cuentas personales de GitHub incluyen **60 horas gratis al mes**. Si aparece un aviso de *"paid by user"*, no te cobrarán nada: este proceso dura menos de 2 minutos y entra dentro de tu cuota gratuita mensual.
 
-1. En este repositorio de GitHub, haz clic en el botón verde **`<> Code`** → pestaña **Codespaces** → **Create codespace on main**.
-2. Espera a que cargue el terminal en el navegador e instala ASK CLI:
+1. Haz clic en el botón **"Open in GitHub Codespaces"** de arriba (ya viene con `ask-cli` preinstalado).
+2. Cuando termine de cargar la terminal en el navegador, ejecuta el asistente:
    ```bash
-   npm install -g ask-cli
+   ./setup-skill.sh
    ```
-3. Inicia sesión con tu cuenta de Amazon:
-   ```bash
-   ask configure --no-browser
-   ```
-   *(Abre en una nueva pestaña el enlace que aparece en la consola, inicia sesión en Amazon y pega el código de autorización devuelto en la terminal).*
-4. Aplica el manifiesto a tu Skill:
-   ```bash
-   ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest "file:alexa-skill/skill.json"
-   ```
-   *(Sustituye `<TU_SKILL_ID>` por el Skill ID que apuntaste en el Paso A).*
-5. ¡Listo! Ya puedes cerrar la pestaña del navegador de Codespaces.
+3. Sigue las instrucciones en pantalla (al iniciar sesión con Amazon, responde **`n`** cuando te pregunte si quieres vincular una cuenta de AWS — **no necesitas cuenta AWS**).
+4. Copia el **`ALEXA_CLIENT_ID`** y **`ALEXA_CLIENT_SECRET`** que el asistente imprimirá al final.
+5. ¡Listo! Ya puedes cerrar o borrar el Codespace.
 
 ---
 
 #### Opción 2: Con Docker en un solo comando (Para usuarios de Docker)
-Si ya tienes Docker instalado en tu servidor o equipo, puedes ejecutar un contenedor efímero sin instalar Node.js ni dependencias en tu sistema:
-
-> **Nota:** Ejecuta este comando desde la raíz del repositorio donde se encuentra la carpeta `alexa-skill`.
+Si ya tienes Docker instalado, puedes ejecutar el mismo asistente en un contenedor efímero sin instalar Node.js en tu sistema *(ejecuta el comando desde la raíz del repositorio)*:
 
 - **En Linux / macOS:**
   ```bash
-  docker run -it --rm -v "$(pwd)/alexa-skill:/skill" node:lts-alpine sh -c "npm install -g ask-cli && ask configure --no-browser && ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest file:/skill/skill.json"
+  docker run -it --rm -v "$(pwd):/repo" node:lts-alpine sh /repo/setup-skill.sh
   ```
 - **En Windows (PowerShell):**
   ```powershell
-  docker run -it --rm -v "${PWD}/alexa-skill:/skill" node:lts-alpine sh -c "npm install -g ask-cli && ask configure --no-browser && ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest file:/skill/skill.json"
+  docker run -it --rm -v "${PWD}:/repo" node:lts-alpine sh /repo/setup-skill.sh
   ```
-*(Sustituye `<TU_SKILL_ID>` por tu Skill ID. Te pedirá abrir un enlace en tu navegador para autorizar la sesión).*
 
 ---
 
 #### Opción 3: En local con Node.js
-Si prefieres usar la terminal de tu ordenador y tienes Node.js instalado:
+Si ya tienes [Node.js](https://nodejs.org/) en tu equipo, ejecuta desde la raíz del repositorio:
+```bash
+./setup-skill.sh
+```
+*(Si `ask-cli` no está instalado, el script lo instalará automáticamente).*
 
-1. Instala ASK CLI:
+<details>
+<summary>🛠️ Método manual (avanzado, sin usar el asistente)</summary>
+
+Si prefieres hacerlo paso a paso manualmente:
+1. Entra en [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask), crea una Skill nueva (**Custom Model**) y apunta su **Skill ID**.
+2. Instala y configura ASK CLI:
    ```bash
    npm install -g ask-cli
+   ask configure --no-browser   # Responde 'n' a vincular cuenta AWS
    ```
-2. Inicia sesión en Amazon:
-   ```bash
-   ask configure
-   ```
-3. Desde la carpeta del repositorio, sube el manifiesto:
+3. *(Opcional)* Edita `alexa-skill/skill.json` (en **UTF-8**) si quieres cambiar el nombre `"Casa"`.
+4. Sube el manifiesto a tu Skill:
    ```bash
    ask smapi update-skill-manifest -s <TU_SKILL_ID> -g development --manifest "file:alexa-skill/skill.json"
    ```
-   *(Sustituye `<TU_SKILL_ID>` por tu Skill ID).*
+5. Obtén tus credenciales con `ask smapi get-skill-credentials -s <TU_SKILL_ID>` o en **Alexa Developer Console → Tu Skill → Build → Permissions** (al final de la página).
 
----
+</details>
 
-> **💡 Tip (Cambiar el nombre):** Por defecto, Alexa dirá *"Tienes una notificación nueva de **Casa**"* (o *"**Home**"* en inglés). Si quieres que diga otra cosa (ej. "HomeAssistant" o "Servidor"), abre el archivo `alexa-skill/skill.json` y cambia el valor `"name": "Casa"` (o el idioma que uses) por el nombre que prefieras antes de ejecutar el comando de subida.
->
-> **⚠️ Nota de codificación:** Si editas el archivo `skill.json`, asegúrate de que tu editor lo guarde con formato **UTF-8**. Si se guarda en UTF-16 (común en algunos editores de Windows), ASK CLI dará error.
->
-> **ℹ️ Sobre el endpoint URI:** El archivo `skill.json` contiene un ARN de Lambda (`ReflectorTemplateSkill`). Se trata de un **endpoint público genérico proporcionado por Amazon** que se usa como placeholder — no es un recurso personal. **No lo modifiques.** Las notificaciones proactivas no pasan por este endpoint; simplemente es un campo obligatorio del manifiesto de la skill.
+> **ℹ️ Sobre el endpoint URI:** El archivo `alexa-skill/skill.json` contiene un ARN de Lambda (`ReflectorTemplateSkill`). Se trata de un **endpoint público genérico proporcionado por Amazon** usado como placeholder — no es un recurso personal. **No lo modifiques.** Las notificaciones proactivas no pasan por este endpoint; es solo un campo obligatorio del manifiesto.
 
-### Paso C: Obtener Credenciales
-1. Vuelve a la [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) y entra en tu Skill.
-2. Entra en el apartado **Build**.
-3. En la barra inferior del menú, haz clic en **Build -> Permissions** y en la parte de abajo de la página, encontrarás el **Alexa Client ID** y el **Alexa Client Secret**. Cópialos.
+### Paso B: Habilitar la Skill en tu cuenta (¡Último paso en la app de Alexa!)
+Por privacidad, Amazon siempre exige activar la skill y conceder el permiso de notificaciones desde la app móvil:
 
-### Paso D: Habilitar la Skill en tu cuenta (¡Último paso de Amazon!)
-Para que tu altavoz te notifique, necesitas decirle a Alexa que quieres usar esta nueva Skill:
-
-1. Abre la app de Alexa en tu móvil (asegúrate de usar la misma cuenta de Amazon que usaste de developer).
+1. Abre la app de Alexa en tu móvil (asegúrate de usar la misma cuenta de Amazon que usaste en el Paso A).
 2. Ve a **Más** > **Skills y juegos** > haz scroll hasta abajo y entra en **Tus Skills**.
 3. En la pestaña **Desarrollo** (o *Dev*), verás la skill que acabas de crear.
-4. Toca sobre ella, pulsa **Activar para usar** (Enable to use) y **concédele el permiso de Notificaciones**.
+4. Toca sobre ella, pulsa **Activar para usar** (*Enable to use*) y **concédele el permiso de Notificaciones**.
 
 ---
 
@@ -199,14 +182,15 @@ curl -X POST http://<IP_DEL_BRIDGE>:8080/notify \
 | Endpoint | Método | Descripción |
 |----------|--------|-------------|
 | `/notify` | `POST` | Enviar una notificación proactiva a Alexa |
-| `/health` | `GET` | Health check (devuelve `{"status": "ok"}`) |
+| `/health` | `GET` | Health check ligero (devuelve `{"status": "ok"}`, sin autenticación) |
+| `/status` | `GET` | Estado de configuración, región, credenciales y token activo de Amazon (protegido por `API_KEY` si está definida) |
 | `/history` | `GET` | Devuelve el historial en memoria (más recientes primero). Soporta `?limit=N` (por defecto 50) |
 
 #### POST `/notify` — Cuerpo de la petición
 
 | Campo | Tipo | Requerido | Por defecto | Descripción |
 |-------|------|-----------|-------------|-------------|
-| `creator_name` | `string` | ✅ | — | El texto que Alexa leerá en voz alta (si supera 256 caracteres, se trunca automáticamente a 253 + '...') |
+| `message` (o `creator_name`) | `string` | ✅ | — | El texto que Alexa leerá en voz alta — acepta tanto `message` como `creator_name` (si supera 256 caracteres, se trunca automáticamente a 253 + '...') |
 | `urgency` | `string` | ❌ | `"URGENT"` | Debe ser `"URGENT"` |
 | `expiry_hours` | `number` | ❌ | `24` | Horas hasta que la notificación expira (acotado automáticamente entre 5 min y 24h) |
 | `debounce_seconds` | `number` | ❌ | `0` (o config) | Ventana en segundos para ignorar notificaciones idénticas consecutivas |

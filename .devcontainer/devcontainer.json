@@ -1,0 +1,6 @@
+{
+  "name": "Alexa Notify Bridge — Skill Setup",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm install -g ask-cli && chmod +x setup-skill.sh",
+  "postAttachCommand": "printf '\\n======================================================================\\n  🚀 Alexa Notify Bridge — Skill Setup ready!\\n  Run:  ./setup-skill.sh\\n  Ejecuta:  ./setup-skill.sh\\n======================================================================\\n\\n'"
+}

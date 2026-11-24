@@ -13,3 +13,7 @@ docker-compose.override.yml
 venv/
 addon/
 repository.yaml
+.devcontainer/
+setup-skill.sh
+tests/
+.github/

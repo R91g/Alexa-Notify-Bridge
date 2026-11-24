@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+- **New `GET /status` endpoint:** Returns bridge diagnostics (region, credentials configured, token validity & remaining TTL, effective expiry/debounce settings, history count, and uptime), protected by `API_KEY` when configured.
+- **Accept `message` alias in `POST /notify`:** Requests can now use either `"message"` or `"creator_name"` (100% backwards-compatible).
+- **1-click Alexa Skill setup wizard (`setup-skill.sh` + `.devcontainer`):** Automated bilingual wizard for GitHub Codespaces, Docker, and local Node.js that creates the private skill, applies proactive permissions, allows custom skill naming, and prints `ALEXA_CLIENT_ID` and `ALEXA_CLIENT_SECRET`.
+- **Security upgrades:**
+  - Updated dependencies to `fastapi==0.165.0` (`starlette==1.10.0`), `uvicorn==0.54.0`, `httpx==0.28.1`, `pydantic==2.14.4`, and `python-dotenv==1.2.4` (fixes Starlette CVEs).
+  - Upgraded base images to Python 3.13 (`3.13-alpine3.22` for the add-on, `python:3.13-slim` for standalone Docker) replacing EOL Alpine 3.18.
+  - Drop root privileges in the add-on using `su-exec` (`appuser`) and confine the Python API runtime in a strict AppArmor child profile without broad filesystem access.
+  - Sanitized upstream error responses so raw Amazon/network error bodies are kept in server logs only.
+- **Reliability & HTTP improvements:**
+  - Switched internal timers (`TokenCache`, `DebounceFilter`, `RateLimiter`) from `time.time()` to `time.monotonic()` to avoid NTP clock-jump issues.
+  - Shared `httpx.AsyncClient` managed in FastAPI `lifespan` with explicit timeouts and TLS connection reuse.
+  - Prevented duplicate OAuth token refreshes on concurrent `401` responses.
+  - Mapped upstream Amazon errors cleanly to `502 Bad Gateway` (with specific log hints for `403` and `432` daily quota) and timeouts to `504 Gateway Timeout`, plus `Retry-After` headers on local `429` rate limits.
+  - Safe parsing for numeric environment variables (no startup crashes on typos or `NaN`/`Infinity`).
+- **Documentation:** Added Spanish add-on documentation (`DOCS_es.md`), Alexa+ (Early Access) compatibility notes, and expanded the test suite to 33 passing tests.
+
 ## 1.2.1
 
 - Rollback debounce cache on delivery failure: if Amazon API or network fails, the message is unblocked so subsequent retries succeed immediately.

@@ -4,3 +4,5 @@ CHANGELOG.md
 README.md
 translations/
 *.md
+__pycache__/
+*.py[cod]

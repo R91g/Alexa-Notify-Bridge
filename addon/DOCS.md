@@ -1,5 +1,7 @@
 # Alexa Notify Bridge — Documentation
 
+[🇪🇸 Español](https://github.com/R91g/Alexa-Notify-Bridge/blob/master/addon/DOCS_es.md) | 🇬🇧 English
+
 A lightweight bridge that lets you send custom proactive notifications to your Amazon Echo (Alexa) devices via local HTTP requests, directly from Home Assistant.
 
 Alexa will light up the yellow ring and read your notifications when you ask: *"Alexa, what are my notifications?"*.
@@ -16,6 +18,8 @@ You will need:
 
 Both can be found in the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) → Your Skill → Build → Permissions.
 
+> **⚠️ Alexa+ (Early Access) Compatibility:** On devices enrolled in Amazon's **Alexa+ Early Access** program, proactive notifications are still delivered to your account (Alexa will read them when you ask *"What are my notifications?"*), but **the yellow ring does not light up** and no chime plays. This is an Alexa+ limitation outside the bridge's control; opting out of Alexa+ Early Access restores normal yellow ring notifications.
+
 ---
 
 ## Configuration
@@ -26,13 +30,13 @@ After installing the add-on, go to the **Configuration** tab and fill in the fol
 |--------|----------|---------|-------------|
 | **Alexa Client ID** | ✅ | — | Your Alexa Skill's Client ID |
 | **Alexa Client Secret** | ✅ | — | Your Alexa Skill's Client Secret |
-| **API Key** | ❌ | *(empty)* | Optional password to protect the `/notify` and `/history` endpoints |
+| **API Key** | ❌ | *(empty)* | Optional password to protect the `/notify`, `/history`, and `/status` endpoints |
 | **Region** | ✅ | `EU` | Your Amazon region: `NA` (North America), `EU` (Europe), `FE` (Far East) |
 | **Log Level** | ✅ | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 | **Default Notification Expiry** | ✅ | `24` | Hours until notifications expire (0.1–24). Can be overridden per request |
 | **Debounce Filter** | ❌ | `0` | Minimum seconds to ignore duplicate notifications (0 = disabled) |
 
-> **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify` and `/history` must include the header `x-api-key: your_key`.
+> **Security Tip:** Setting an API Key is strongly recommended. If set, all requests to `/notify`, `/history`, and `/status` must include the header `x-api-key: your_key`.
 
 ---
 
@@ -122,14 +126,15 @@ sequence:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/notify` | `POST` | Send a proactive notification to Alexa |
-| `/health` | `GET` | Health check (returns `{"status": "ok"}`) |
+| `/health` | `GET` | Lightweight health check (returns `{"status": "ok"}`, unauthenticated) |
+| `/status` | `GET` | Bridge configuration, region, credentials and active Amazon token status (protected by `API_KEY` if set) |
 | `/history` | `GET` | Returns in-memory notification history (most recent first). Supports `?limit=N` (default 50) |
 
 ### POST `/notify` — Request body
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `creator_name` | `string` | ✅ | — | The text Alexa will read aloud (if longer than 256 chars, automatically truncated to 253 + '...') |
+| `message` (or `creator_name`) | `string` | ✅ | — | The text Alexa will read aloud — accepts either `message` or `creator_name` (if longer than 256 chars, automatically truncated to 253 + '...') |
 | `urgency` | `string` | ❌ | `"URGENT"` | Must be `"URGENT"` |
 | `expiry_hours` | `number` | ❌ | `24` | Hours until the notification expires (clamped automatically between 5 min and 24h) |
 | `debounce_seconds` | `number` | ❌ | `0` (or config) | Window in seconds to ignore identical consecutive notifications |
@@ -156,7 +161,7 @@ When you ask *"Alexa, what are my notifications?"*, it will say:
 
 ## Rate Limiting
 
-To prevent temporary bans from Amazon, the bridge limits requests to **10 notifications per 10-second window**. Exceeding this returns HTTP `429 Too Many Requests`.
+To prevent temporary bans from Amazon, the bridge limits requests to **10 notifications per 10-second window**. Exceeding this returns HTTP `429 Too Many Requests` with a `Retry-After` header.
 
 ---
 
@@ -169,6 +174,7 @@ If Amazon's API returns a server error (5xx) or a network error occurs, the brid
 ## Troubleshooting
 
 - **Notifications not arriving?** Check that you have enabled the skill in the Alexa app and granted it the Notifications permission.
+- **Yellow ring not lighting up on Alexa+ (Early Access)?** On devices enrolled in Amazon's **Alexa+ Early Access** program, proactive notifications are still queued (Alexa will read them if you ask *"What are my notifications?"*), but Amazon currently does not trigger the yellow ring or chime. This is an Alexa+ limitation outside the bridge's control; opting out of Alexa+ Early Access restores normal yellow ring notifications.
 - **Authentication errors in the log?** Verify your Alexa Client ID and Client Secret in the add-on Configuration tab.
 - **Wrong region?** Make sure the Region setting matches the Amazon account region where your Alexa devices are registered.
 - **Check the logs:** Go to the add-on's **Log** tab in Home Assistant for detailed diagnostic information. Set the log level to `DEBUG` for maximum detail.

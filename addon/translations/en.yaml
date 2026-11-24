@@ -7,7 +7,7 @@ configuration:
     description: "Your Alexa Skill Client Secret (found in the Alexa Developer Console → Build → Permissions)"
   api_key:
     name: "API Key"
-    description: "Optional password to protect the /notify endpoint. If set, include it as 'x-api-key' header in your requests."
+    description: "Optional password to protect the /notify, /history, and /status endpoints. If set, include it as 'x-api-key' header in your requests."
   region:
     name: "Amazon API Region"
     description: "Your Amazon Alexa region: NA (North America), EU (Europe), FE (Far East)"

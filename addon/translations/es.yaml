@@ -7,7 +7,7 @@ configuration:
     description: "Tu Client Secret de la Skill de Alexa (se encuentra en la Alexa Developer Console → Build → Permissions)"
   api_key:
     name: "Clave de API"
-    description: "Contraseña opcional para proteger el endpoint /notify. Si se configura, inclúyela como cabecera 'x-api-key' en tus peticiones."
+    description: "Contraseña opcional para proteger los endpoints /notify, /history y /status. Si se configura, inclúyela como cabecera 'x-api-key' en tus peticiones."
   region:
     name: "Región de la API de Amazon"
     description: "Tu región de Amazon Alexa: NA (Norteamérica), EU (Europa), FE (Lejano Oriente)"

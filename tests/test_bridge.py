@@ -7,10 +7,10 @@ Run from repository root:
     pytest
 """
 
+import asyncio
 import importlib
 import json
 import sys
-import time
 from pathlib import Path
 
 import httpx
@@ -22,6 +22,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 _RealAsyncClient = httpx.AsyncClient
+_open_clients: list[TestClient] = []
+
+
+@pytest.fixture(autouse=True)
+def _close_test_clients():
+    """Ensure every TestClient created in a test exits its lifespan cleanly."""
+    yield
+    while _open_clients:
+        client = _open_clients.pop()
+        client.__exit__(None, None, None)
 
 
 class FakeAmazon:
@@ -30,8 +40,9 @@ class FakeAmazon:
     def __init__(self):
         self.calls: list[httpx.Request] = []
         self.token_status = 200
+        self.token_counter = 0
         self.proactive_status = 202
-        self.proactive_responses: list[int] = []
+        self.proactive_responses: list[int | Exception] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request)
@@ -39,22 +50,29 @@ class FakeAmazon:
 
         if url == "https://api.amazon.com/auth/o2/token":
             if self.token_status == 200:
+                self.token_counter += 1
                 return httpx.Response(
                     200,
-                    json={"access_token": "mock-lwa-token", "expires_in": 3600},
+                    json={
+                        "access_token": f"mock-lwa-token-{self.token_counter}",
+                        "expires_in": 3600,
+                    },
                 )
             return httpx.Response(self.token_status, text="OAuth failed")
 
         if "proactiveEvents" in url:
             # If a queue of responses was configured, pop the next one
             if self.proactive_responses:
-                status = self.proactive_responses.pop(0)
+                next_item = self.proactive_responses.pop(0)
+                if isinstance(next_item, Exception):
+                    raise next_item
+                status = next_item
             else:
                 status = self.proactive_status
 
             if status == 202:
                 return httpx.Response(202)
-            return httpx.Response(status, text=f"Amazon error {status}")
+            return httpx.Response(status, text=f"Amazon internal error body {status}")
 
         return httpx.Response(404, text=f"Unexpected URL: {url}")
 
@@ -106,6 +124,7 @@ def make_test_client(monkeypatch, env_overrides: dict | None = None) -> tuple[Te
 
     client = TestClient(main.app)
     client.__enter__()  # Trigger lifespan startup checks
+    _open_clients.append(client)
     fake.calls.clear()
 
     return client, fake
@@ -120,6 +139,56 @@ def test_health_endpoint(monkeypatch):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_status_endpoint_returns_diagnostics(monkeypatch):
+    """GET /status reports region, credentials, token validity, config and history count."""
+    client, _ = make_test_client(
+        monkeypatch,
+        {
+            "PROACTIVE_EVENTS_URL": "https://api.amazonalexa.com/v1/proactiveEvents/stages/development",
+            "DEBOUNCE_SECONDS": "15",
+            "DEFAULT_EXPIRY_HOURS": "12",
+        },
+    )
+    client.post("/notify", json={"message": "Status check msg"})
+
+    response = client.get("/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["region"] == "NA"
+    assert data["credentials_configured"] is True
+    assert data["api_key_enabled"] is False
+    assert data["token_valid"] is True
+    assert data["token_expires_in_seconds"] > 0
+    assert data["default_expiry_hours"] == 12.0
+    assert data["debounce_seconds"] == 15.0
+    assert data["history_count"] == 1
+    assert data["uptime_seconds"] >= 0
+
+
+def test_status_endpoint_requires_api_key_when_configured(monkeypatch):
+    """GET /status enforces API_KEY when configured and reports api_key_enabled=True."""
+    client, _ = make_test_client(monkeypatch, {"API_KEY": "my-secret"})
+    assert client.get("/status").status_code == 403
+    r = client.get("/status", headers={"x-api-key": "my-secret"})
+    assert r.status_code == 200
+    assert r.json()["api_key_enabled"] is True
+
+
+def test_status_endpoint_when_credentials_missing(monkeypatch):
+    """GET /status cleanly reports credentials_configured=False and token_valid=False when unset."""
+    client, _ = make_test_client(
+        monkeypatch,
+        {"ALEXA_CLIENT_ID": "", "ALEXA_CLIENT_SECRET": ""},
+    )
+    response = client.get("/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["credentials_configured"] is False
+    assert data["token_valid"] is False
+    assert data["token_expires_in_seconds"] == 0
 
 
 # ─── Notification delivery ───────────────────────────────────────────────────
@@ -151,6 +220,26 @@ def test_successful_notification(monkeypatch):
     assert event_body["relevantAudience"]["type"] == "Multicast"
 
 
+def test_notification_accepts_message_alias(monkeypatch):
+    """POST /notify accepts 'message' as an intuitive alias for 'creator_name'."""
+    client, fake = make_test_client(monkeypatch)
+    response = client.post("/notify", json={"message": "La lavadora ha terminado"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+
+    proactive_calls = fake.requests_to("proactiveEvents")
+    assert len(proactive_calls) == 1
+    event_body = json.loads(proactive_calls[0].content)
+    assert event_body["event"]["payload"]["messageGroup"]["creator"]["name"] == "La lavadora ha terminado"
+
+
+def test_notification_empty_message_alias_returns_422(monkeypatch):
+    """Empty or whitespace-only 'message' alias is rejected with 422."""
+    client, _ = make_test_client(monkeypatch)
+    assert client.post("/notify", json={"message": ""}).status_code == 422
+    assert client.post("/notify", json={"message": "   "}).status_code == 422
+
+
 def test_token_caching(monkeypatch):
     """Access token is cached and reused across multiple notifications."""
     client, fake = make_test_client(monkeypatch)
@@ -164,6 +253,26 @@ def test_token_caching(monkeypatch):
 
     proactive_calls = fake.requests_to("proactiveEvents")
     assert len(proactive_calls) == 2
+
+
+def test_shared_http_client_reused_and_closed_on_shutdown(monkeypatch):
+    """Lifespan creates a shared AsyncClient with explicit timeout and closes it cleanly on exit."""
+    client, _ = make_test_client(monkeypatch)
+    import main
+
+    shared = main.http_client
+    assert shared is not None
+    assert not shared.is_closed
+    assert shared.timeout == main.HTTP_TIMEOUT
+
+    client.post("/notify", json={"creator_name": "Reuse client test"})
+    assert main.http_client is shared
+
+    # Manually trigger shutdown and verify closure
+    _open_clients.remove(client)
+    client.__exit__(None, None, None)
+    assert shared.is_closed
+    assert main.http_client is None
 
 
 # ─── Expiry hours clamping ───────────────────────────────────────────────────
@@ -259,6 +368,20 @@ def test_empty_env_vars_fallback_cleanly(monkeypatch):
     assert response.json()["expiry_hours"] == 24.0
 
 
+def test_invalid_and_non_finite_env_vars_fallback_cleanly(monkeypatch):
+    """Invalid strings or NaN/Infinity in numeric env vars fall back to defaults without crashing."""
+    client, _ = make_test_client(
+        monkeypatch,
+        {"DEFAULT_EXPIRY_HOURS": "24h", "DEBOUNCE_SECONDS": "inf"},
+    )
+    import main
+
+    assert main.DEFAULT_EXPIRY_HOURS == 24.0
+    assert main.DEBOUNCE_SECONDS == 0.0
+    response = client.post("/notify", json={"creator_name": "Bad env test"})
+    assert response.status_code == 200
+
+
 # ─── Debounce Filter (Anti-Duplicates) ───────────────────────────────────────
 
 
@@ -313,9 +436,9 @@ def test_debounce_rollback_on_delivery_failure(monkeypatch):
 
     monkeypatch.setattr("asyncio.sleep", lambda s: _dummy_sleep())
 
-    # 1st attempt fails after retry (both 500s consumed)
+    # 1st attempt fails after retry (both 500s consumed) -> 502 Bad Gateway
     r1 = client.post("/notify", json={"creator_name": "Fallo temporal"})
-    assert r1.status_code == 500
+    assert r1.status_code == 502
 
     # Immediate retry with identical text must NOT be debounced
     r2 = client.post("/notify", json={"creator_name": "Fallo temporal"})
@@ -328,7 +451,7 @@ def test_debounce_rollback_on_delivery_failure(monkeypatch):
 
 def test_api_key_required_when_configured(monkeypatch):
     """When API_KEY is set, requests without valid x-api-key header return 403 on /notify and /history."""
-    client, _ = make_test_client(monkeypatch, {"API_KEY": "secret-token-123"})
+    client, _ = make_test_client(monkeypatch, {"API_KEY": "  secret-token-123  "})
 
     # No key provided
     r1 = client.post("/notify", json={"creator_name": "Hello"})
@@ -343,7 +466,7 @@ def test_api_key_required_when_configured(monkeypatch):
     )
     assert r2.status_code == 403
 
-    # Correct key provided
+    # Correct trimmed key provided
     r3 = client.post(
         "/notify",
         json={"creator_name": "Hello"},
@@ -354,8 +477,8 @@ def test_api_key_required_when_configured(monkeypatch):
 
 
 def test_api_key_not_required_when_not_configured(monkeypatch):
-    """When API_KEY is empty/unset, requests without x-api-key succeed."""
-    client, _ = make_test_client(monkeypatch, {"API_KEY": ""})
+    """When API_KEY is empty or whitespace-only, requests without x-api-key succeed."""
+    client, _ = make_test_client(monkeypatch, {"API_KEY": "   "})
     response = client.post("/notify", json={"creator_name": "Hello"})
     assert response.status_code == 200
 
@@ -364,17 +487,19 @@ def test_api_key_not_required_when_not_configured(monkeypatch):
 
 
 def test_rate_limiter_allows_up_to_10_and_blocks_11th(monkeypatch):
-    """Rate limiter allows 10 requests per 10s window and returns 429 on the 11th."""
+    """Rate limiter allows 10 requests per 10s window and returns 429 with Retry-After on the 11th."""
     client, _ = make_test_client(monkeypatch)
 
     for i in range(10):
         r = client.post("/notify", json={"creator_name": f"Message {i}"})
         assert r.status_code == 200, f"Request {i} failed: {r.text}"
 
-    # 11th request must be rate limited
+    # 11th request must be rate limited with Retry-After header
     r11 = client.post("/notify", json={"creator_name": "Message 11"})
     assert r11.status_code == 429
     assert "Rate limit" in r11.json()["detail"]
+    assert "retry-after" in r11.headers
+    assert int(r11.headers["retry-after"]) >= 1
 
 
 # ─── History Endpoint ────────────────────────────────────────────────────────
@@ -410,7 +535,7 @@ def test_history_respects_limit_parameter(monkeypatch):
     assert data["notifications"][0]["message"] == "Msg 2"
 
 
-# ─── Retry on Amazon errors ──────────────────────────────────────────────────
+# ─── Retry & Upstream Amazon Error Handling ──────────────────────────────────
 
 
 def test_token_refreshed_on_401_unauthorized(monkeypatch):
@@ -427,19 +552,76 @@ def test_token_refreshed_on_401_unauthorized(monkeypatch):
     assert len(fake.requests_to("proactiveEvents")) == 2
 
 
+@pytest.mark.anyio
+async def test_concurrent_401_triggers_single_token_refresh(monkeypatch):
+    """Two concurrent refresh calls for the same failed token only hit LWA once."""
+    client, fake = make_test_client(monkeypatch)
+    import main
+
+    stale_token = main.token_cache.token
+    assert stale_token is not None
+
+    t1, t2 = await asyncio.gather(
+        main.get_access_token(force_refresh=True, failed_token=stale_token),
+        main.get_access_token(force_refresh=True, failed_token=stale_token),
+    )
+    assert t1 == t2
+    assert t1 != stale_token
+    assert len(fake.requests_to("/auth/o2/token")) == 1
+
+
 def test_retry_on_5xx_server_error(monkeypatch):
     """If Amazon returns 500 once and then 202, retry succeeds."""
     client, fake = make_test_client(monkeypatch)
     fake.proactive_responses = [500, 202]
 
-    # Monkeypatch sleep to avoid slowing down tests
+    async def _dummy_sleep():
+        return
+
     monkeypatch.setattr("asyncio.sleep", lambda s: _dummy_sleep())
+
+    response = client.post("/notify", json={"creator_name": "Retry 500 test"})
+    assert response.status_code == 200
+    assert len(fake.requests_to("proactiveEvents")) == 2
+
+
+def test_upstream_403_returns_502_without_leaking_body(monkeypatch):
+    """Upstream Amazon 403 maps to 502 (distinct from local API_KEY 403) and hides raw error body."""
+    client, fake = make_test_client(monkeypatch)
+    fake.proactive_responses = [403]
+
+    response = client.post("/notify", json={"creator_name": "Forbidden test"})
+    assert response.status_code == 502
+    detail = response.json()["detail"]
+    assert "403" in detail
+    assert "Amazon internal error body" not in detail
+
+
+def test_upstream_432_daily_quota_returns_502(monkeypatch):
+    """Upstream Amazon 432 daily quota error maps cleanly to 502."""
+    client, fake = make_test_client(monkeypatch)
+    fake.proactive_responses = [432]
+
+    response = client.post("/notify", json={"creator_name": "Quota test"})
+    assert response.status_code == 502
+    assert "432" in response.json()["detail"]
+
+
+def test_upstream_timeout_returns_504(monkeypatch):
+    """Timeout contacting Amazon Proactive Events API retries once and returns 504."""
+    client, fake = make_test_client(monkeypatch)
+    fake.proactive_responses = [
+        httpx.ReadTimeout("timed out"),
+        httpx.ReadTimeout("timed out again"),
+    ]
 
     async def _dummy_sleep():
         return
 
-    response = client.post("/notify", json={"creator_name": "Retry 500 test"})
-    assert response.status_code == 200
+    monkeypatch.setattr("asyncio.sleep", lambda s: _dummy_sleep())
+
+    response = client.post("/notify", json={"creator_name": "Timeout test"})
+    assert response.status_code == 504
     assert len(fake.requests_to("proactiveEvents")) == 2
 
 

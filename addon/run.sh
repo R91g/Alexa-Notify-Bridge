@@ -47,4 +47,4 @@ bashio::log.info "Region: ${REGION}"
 bashio::log.info "Log level: ${LOG_LEVEL}"
 
 cd /app || exit 1
-exec python3 -m uvicorn main:app --host 0.0.0.0 --port 8080
+exec su-exec appuser python3 -m uvicorn main:app --host 0.0.0.0 --port 8080
